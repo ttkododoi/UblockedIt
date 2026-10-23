@@ -1,0 +1,38 @@
+{
+  "name": "ublockedit",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "UblockedIt \u2014 a premium hub for unblocked games, emulators and everything in between.",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:api": "node --no-warnings server/index.js",
+    "dev:all": "node scripts/dev.mjs",
+    "build": "vite build",
+    "start": "NODE_ENV=production node --no-warnings server/index.js",
+    "preview": "vite preview",
+    "bridge": "node runtime/bridge/bridge.mjs",
+    "typecheck": "tsc --noEmit",
+    "dev:web": "vite"
+  },
+  "dependencies": {
+    "adm-zip": "^0.6.1",
+    "bcryptjs": "^3.0.3",
+    "canvas-confetti": "^1.9.4",
+    "express": "^5.3.0",
+    "framer-motion": "^14.6.0",
+    "jmuxer": "^2.1.4",
+    "lucide-react": "^1.61.0",
+    "multer": "^2.5.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}
