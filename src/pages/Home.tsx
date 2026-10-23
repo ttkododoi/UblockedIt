@@ -173,7 +173,7 @@ function EmulatorSection() {
 
   return (
     <section className="section">
-      <div className="card" style={{ padding: 'clamp(24px, 4vw, 44px)', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.1fr)', gap: 40, alignItems: 'center' }}>
+      <div className="card feature-split" style={{ padding: 'clamp(24px, 4vw, 44px)' }}>
         <div>
           <span className="eyebrow"><Boxes size={13} /> Emulator stations</span>
           <h2 className="h2" style={{ marginTop: 12 }}>Your childhood console,<br />booted in a tab.</h2>
@@ -262,10 +262,7 @@ function LabsSection() {
 function ApkSection() {
   return (
     <section className="section">
-      <div
-        className="card"
-        style={{ padding: 'clamp(24px, 4vw, 44px)', display: 'grid', gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,1fr)', gap: 40, alignItems: 'center' }}
-      >
+      <div className="card feature-split feature-split--wide" style={{ padding: 'clamp(24px, 4vw, 44px)' }}>
         <div>
           <span className="eyebrow"><Package size={13} /> APK runner</span>
           <h2 className="h2" style={{ marginTop: 12 }}>Sideload anything.</h2>
