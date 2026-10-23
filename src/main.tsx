@@ -6,6 +6,8 @@ import { AppProvider } from './lib/store';
 import { CatalogProvider } from './lib/catalog';
 import './styles.css';
 
+document.documentElement.dataset.theme = 'white';
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>

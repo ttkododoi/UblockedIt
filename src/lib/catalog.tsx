@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { api } from './api';
 
-export type Source = { provider: 'local' | 'crazygames' | 'poki'; url: string; label: string };
+export type Source = { provider: 'local'; url: string; label: string };
 
 export type Game = {
   id: string;
@@ -11,7 +11,7 @@ export type Game = {
   tags: string[];
   rating: number;
   players: number;
-  cover: { emoji: string; from: string; to: string };
+  cover: string;
   sources: Source[];
   featured?: boolean;
   hot?: boolean;
@@ -48,7 +48,6 @@ export type Runtime = {
 type Catalog = {
   games: Game[];
   categories: string[];
-  providers: Record<string, { label: string; note: string; home: string }>;
   emulators: Emulator[];
   runtimes: Runtime[];
 };
@@ -64,7 +63,6 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const load = () => {
-    setLoading(true);
     api
       .get<Catalog>('/api/catalog')
       .then((data) => {
@@ -72,7 +70,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       })
       .catch(() => {
-        setCatalog({ games: [], categories: ['All'], providers: {}, emulators: [], runtimes: [] });
+        setCatalog({ games: [], categories: ['All'], emulators: [], runtimes: [] });
         setLoading(false);
       });
   };
@@ -87,5 +85,3 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
 export function useCatalog() {
   return useContext(Ctx);
 }
-
-export const providersOf = (g: Game) => g.sources.map((s) => s.provider);

@@ -1,241 +1,155 @@
-import { motion } from 'framer-motion';
-import { ArrowLeft, ArrowUpRight, Crown, Heart, Info, Play, Share2, Star, Trophy, Users } from 'lucide-react';
+import { ArrowLeft, Check, Heart, Play, Star, Trophy, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, fmt } from '../lib/api';
-import { useCatalog, type Game } from '../lib/catalog';
+import { useCatalog } from '../lib/catalog';
 import { useApp } from '../lib/store';
-import { Cover, GameCard, ProviderBadge } from '../components/GameCard';
-import { MagneticButton, Reveal, Stagger } from '../components/ui';
-
-type Score = { username: string; avatar: string; avatar_hue: number; score: number };
+import { GameCard } from '../components/GameCard';
+import { EmptyState } from '../components/ui';
 
 export function GameDetail() {
   const { id } = useParams();
   const { catalog, loading } = useCatalog();
-  const { openPlayer, favorites, toggleFavorite, toast } = useApp();
+  const { openPlayer, favorites, toggleFavorite } = useApp();
   const navigate = useNavigate();
-  const [scores, setScores] = useState<Score[]>([]);
+  const [scores, setScores] = useState<any[]>([]);
   const game = useMemo(() => catalog?.games.find((g) => g.id === id), [catalog, id]);
   const isFav = favorites.includes(id || '');
 
   useEffect(() => {
     if (!id) return;
-    api.get<Score[]>(`/api/leaderboard?game=${encodeURIComponent(id)}`).then(setScores).catch(() => {});
+    api.get(`/api/leaderboard?game=${encodeURIComponent(id)}`).then(setScores).catch(() => {});
   }, [id]);
 
   const related = useMemo(
-    () =>
-      (catalog?.games || [])
-        .filter((g) => g.id !== id && (g.category === game?.category || g.tags.some((t) => game?.tags.includes(t))))
-        .slice(0, 4),
+    () => (catalog?.games || []).filter((g) => g.id !== id && (g.category === game?.category || g.tags.some((t) => game?.tags.includes(t)))).slice(0, 4),
     [catalog, game, id]
   );
 
-  if (loading) {
-    return (
-      <div className="page">
-        <div className="skeleton" style={{ height: 300, borderRadius: 28 }} />
-      </div>
-    );
-  }
+  if (loading) return <div className="skeleton" style={{ height: 420, borderRadius: 24 }} />;
 
-  if (!game) {
+  if (!game)
     return (
-      <div className="page">
-        <div className="empty">
-          <div className="big">🎮</div>
-          <h2 style={{ marginBottom: 8 }}>Game not found</h2>
-          <p className="muted">That title isn’t in the catalog — it may have been removed.</p>
-          <Link to="/games" className="btn btn-primary" style={{ marginTop: 16 }}>
-            <ArrowLeft size={15} /> Back to library
-          </Link>
+      <EmptyState icon={ArrowLeft} title="Game not found">
+        That title isn’t in the catalog.
+        <div style={{ marginTop: 14 }}>
+          <Link to="/games" className="btn btn--sm btn--primary">Back to the library</Link>
         </div>
-      </div>
+      </EmptyState>
     );
-  }
 
   return (
-    <div className="page">
-      <button className="btn btn-ghost btn-sm" onClick={() => navigate(-1)} style={{ marginBottom: 18 }}>
+    <>
+      <button className="btn btn--sm btn--ghost" onClick={() => navigate(-1)} style={{ marginBottom: 20 }}>
         <ArrowLeft size={14} /> Back
       </button>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.35fr) minmax(0,1fr)', gap: 28 }} className="detail-grid">
-        <Reveal>
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ position: 'relative' }}>
-              <Cover game={game} className="detail-cover" />
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  background: 'linear-gradient(0deg, rgba(4,4,10,.85), rgba(4,4,10,.15) 55%, transparent)',
-                }}
-              />
-              <div style={{ position: 'absolute', bottom: 20, left: 22, right: 22 }}>
-                <div className="row wrap" style={{ gap: 8, marginBottom: 10 }}>
-                  {game.sources.map((s) => (
-                    <ProviderBadge key={s.label} provider={s.provider} />
-                  ))}
-                  <span className="badge">#{game.category}</span>
-                </div>
-                <h1 style={{ fontSize: 'clamp(30px,4.4vw,50px)', color: '#fff', letterSpacing: '-0.045em' }}>{game.title}</h1>
-                <p style={{ color: 'rgba(255,255,255,.75)', fontSize: 14.5, marginTop: 6, maxWidth: '56ch' }}>{game.tagline}</p>
-              </div>
+      <div className="split">
+        <div>
+          <div className="card" style={{ overflow: 'hidden' }}>
+            <div style={{ position: 'relative', aspectRatio: '16 / 9' }}>
+              <img src={game.cover} alt={`${game.title} screenshot`} width={1280} height={720} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
-            <div style={{ padding: '20px 22px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-              <MagneticButton className="btn btn-primary" onClick={() => openPlayer(game.id)}>
-                <Play size={16} fill="currentColor" /> Play now
-              </MagneticButton>
-              <button className="btn" onClick={() => toggleFavorite(game.id)} style={{ color: isFav ? '#ff6b9d' : undefined }}>
-                <Heart size={15} fill={isFav ? 'currentColor' : 'none'} /> {isFav ? 'In library' : 'Add to library'}
-              </button>
-              <button
-                className="btn btn-ghost"
-                onClick={() => {
-                  navigator.clipboard
-                    ?.writeText(window.location.href)
-                    .then(() => toast('Link copied to clipboard.', 'success'))
-                    .catch(() => toast('Could not copy the link.', 'error'));
-                }}
-              >
-                <Share2 size={15} /> Share
-              </button>
-              <div className="spacer" />
-              <span className="row" style={{ gap: 14, fontSize: 13, color: 'var(--muted)' }}>
-                <span className="row" style={{ gap: 4 }}>
-                  <Star size={13} fill="#ffd166" stroke="#ffd166" /> {game.rating.toFixed(1)}
+            <div style={{ padding: 24 }}>
+              <div className="row wrap" style={{ gap: 8, marginBottom: 10 }}>
+                <span className="pill pill--green"><span className="dot" />Self-hosted</span>
+                <span className="pill">{game.category}</span>
+                {game.hot && <span className="pill pill--blue">Popular</span>}
+              </div>
+              <h1 className="h2">{game.title}</h1>
+              <p className="muted" style={{ marginTop: 8, fontSize: 16 }}>{game.tagline}</p>
+
+              <div className="row wrap" style={{ gap: 10, marginTop: 20 }}>
+                <button className="btn btn--primary btn--lg" onClick={() => openPlayer(game.id)}>
+                  <Play size={16} fill="currentColor" /> Play now
+                </button>
+                <button className="btn btn--lg btn--outline" onClick={() => toggleFavorite(game.id)}>
+                  <Heart size={15} fill={isFav ? 'currentColor' : 'none'} style={{ color: isFav ? '#e0245e' : undefined }} />
+                  {isFav ? 'In library' : 'Add to library'}
+                </button>
+                <div className="spacer" />
+                <span className="row" style={{ gap: 16, color: 'var(--ink-2)', fontSize: 14 }}>
+                  <span className="row" style={{ gap: 5 }}>
+                    <Star size={13} fill="currentColor" strokeWidth={0} style={{ color: '#f5a623' }} /> {game.rating.toFixed(1)}
+                  </span>
+                  <span className="row" style={{ gap: 5 }}><Users size={13} /> {fmt.num(game.players)}</span>
                 </span>
-                <span className="row" style={{ gap: 4 }}>
-                  <Users size={13} /> {fmt.num(game.players)}
-                </span>
-              </span>
+              </div>
             </div>
           </div>
 
-          <div className="card" style={{ padding: 22, marginTop: 18 }}>
-            <div className="eyebrow">Sources</div>
-            <div className="stack" style={{ marginTop: 14, gap: 9 }}>
-              {game.sources.map((s, i) => (
-                <div key={`${s.provider}-${i}`} className="row" style={{ gap: 12, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--line)' }}>
-                  <span className="mono" style={{ fontSize: 11, color: 'var(--muted)', width: 18 }}>{String(i + 1).padStart(2, '0')}</span>
-                  <ProviderBadge provider={s.provider} />
-                  <span style={{ fontSize: 12.5, color: 'var(--muted)', flex: 1 }}>
-                    {s.provider === 'local'
-                      ? 'Runs from this hub — no external requests.'
-                      : s.provider === 'crazygames'
-                      ? 'Official CrazyGames embed player.'
-                      : 'Official Poki listing — opens in a new tab if embedding is blocked.'}
-                  </span>
-                  {s.provider !== 'local' && (
-                    <a href={s.url} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">
-                      <ArrowUpRight size={13} />
-                    </a>
-                  )}
+          <div className="card card--pad" style={{ marginTop: 20 }}>
+            <h3 style={{ fontSize: 16 }}>How this runs</h3>
+            <div className="stack" style={{ gap: 10, marginTop: 12 }}>
+              {[
+                'Served from this hub as a static build — no third-party player, no iframe from another company.',
+                'Progress and settings stay in your browser; sign in to store high scores on your account.',
+                game.tags.includes('webgl') ? 'Uses WebGL — needs a reasonably modern GPU.' : 'Runs comfortably on phones and laptops.',
+              ].map((t) => (
+                <div key={t} className="row" style={{ gap: 9, fontSize: 13.5, color: 'var(--ink-2)', alignItems: 'flex-start' }}>
+                  <Check size={15} style={{ color: 'var(--green)', flexShrink: 0, marginTop: 2 }} />
+                  {t}
                 </div>
               ))}
             </div>
-            <div className="note" style={{ marginTop: 16 }}>
-              <Info />
-              <div>
-                Some providers region-lock titles or block iframes. If a source doesn’t load, use the source switcher
-                inside the player — installed builds always work.
-              </div>
-            </div>
           </div>
-        </Reveal>
+        </div>
 
         <div className="stack">
-          <Reveal delay={0.08}>
-            <div className="card" style={{ padding: 22 }}>
-              <div className="eyebrow"><Trophy size={12} /> Leaderboard</div>
-              {scores.length === 0 ? (
-                <p className="small muted" style={{ marginTop: 12, lineHeight: 1.65 }}>
-                  No scores yet for this title. Built-in arcade games (Neon Serpent, Vector Breakout) post scores
-                  automatically once you’re signed in.
-                </p>
-              ) : (
-                <div className="stack" style={{ gap: 8, marginTop: 14 }}>
-                  {scores.map((s, i) => (
-                    <div key={`${s.username}-${i}`} className="row" style={{ gap: 10, fontSize: 13 }}>
-                      <span style={{ width: 20, color: i === 0 ? '#ffd166' : 'var(--muted)' }}>
-                        {i === 0 ? <Crown size={14} /> : i + 1}
-                      </span>
-                      <span className="avatar" style={{ ['--hue' as any]: s.avatar_hue, width: 26, height: 26, fontSize: 12, borderRadius: 8 }}>
-                        {s.avatar}
-                      </span>
-                      <span style={{ flex: 1 }}>{s.username}</span>
-                      <span className="mono" style={{ fontWeight: 600 }}>{fmt.num(s.score)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </Reveal>
-
-          <Reveal delay={0.14}>
-            <div className="card" style={{ padding: 22 }}>
-              <div className="eyebrow">Details</div>
-              <div className="stack" style={{ gap: 10, marginTop: 14, fontSize: 13 }}>
-                {[
-                  ['Genre', game.category],
-                  ['Players online', fmt.num(game.players)],
-                  ['Rating', `${game.rating.toFixed(1)} / 5`],
-                  ['Works offline', game.sources.some((s) => s.provider === 'local') ? 'Yes' : 'No'],
-                  ['Tags', game.tags.join(', ')],
-                ].map(([k, v]) => (
-                  <div key={k} className="row" style={{ justifyContent: 'space-between', gap: 14 }}>
-                    <span className="muted">{k}</span>
-                    <span style={{ textAlign: 'right' }}>{v}</span>
+          <div className="card card--pad">
+            <h3 style={{ fontSize: 15, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <Trophy size={15} /> High scores
+            </h3>
+            {scores.length === 0 ? (
+              <p className="small muted" style={{ marginTop: 10, lineHeight: 1.6 }}>
+                No scores recorded yet. Play a round while signed in and your name lands here.
+              </p>
+            ) : (
+              <div className="stack" style={{ gap: 8, marginTop: 12 }}>
+                {scores.map((s, i) => (
+                  <div key={i} className="row" style={{ fontSize: 13.5 }}>
+                    <span className="tiny muted" style={{ width: 14 }}>{i + 1}</span>
+                    <span style={{ flex: 1 }}>{s.username}</span>
+                    <span className="mono" style={{ fontWeight: 600 }}>{fmt.num(s.score)}</span>
                   </div>
                 ))}
               </div>
-            </div>
-          </Reveal>
+            )}
+          </div>
 
-          <Reveal delay={0.2}>
-            <div className="card" style={{ padding: 18 }}>
-              <div className="eyebrow" style={{ marginBottom: 12 }}>Quick switch</div>
-              <div className="stack" style={{ gap: 7 }}>
-                {related.slice(0, 3).map((g: Game) => (
-                  <Link key={g.id} to={`/game/${g.id}`} className="row" style={{ gap: 10, padding: 6, borderRadius: 10 }}>
-                    <span style={{ width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center', background: `linear-gradient(135deg, ${g.cover.from}, ${g.cover.to})`, fontSize: 15 }}>
-                      {g.cover.emoji}
-                    </span>
-                    <span style={{ fontSize: 12.5 }}>{g.title}</span>
-                  </Link>
-                ))}
-              </div>
+          <div className="card card--pad">
+            <h3 style={{ fontSize: 15 }}>Details</h3>
+            <div className="stack" style={{ gap: 9, marginTop: 12, fontSize: 13.5 }}>
+              {[
+                ['Genre', game.category],
+                ['Players now', fmt.num(game.players)],
+                ['Rating', `${game.rating.toFixed(1)} / 5`],
+                ['Hosting', 'This server'],
+                ['Tags', game.tags.filter((t) => t !== 'offline' && t !== 'self-hosted').join(', ') || '—'],
+              ].map(([k, v]) => (
+                <div key={k} className="row row--between" style={{ gap: 12 }}>
+                  <span className="muted">{k}</span>
+                  <span style={{ textAlign: 'right' }}>{v}</span>
+                </div>
+              ))}
             </div>
-          </Reveal>
+          </div>
         </div>
       </div>
 
       {related.length > 0 && (
         <section className="section">
           <div className="section-head">
-            <div>
-              <div className="eyebrow">More like this</div>
-              <h2 style={{ marginTop: 10 }}>Keep the streak going</h2>
-            </div>
-            <Link to="/games" className="btn btn-sm">All games</Link>
+            <h2 style={{ fontSize: 26 }}>More like this</h2>
+            <Link to="/games" className="btn btn--sm btn--outline">All games</Link>
           </div>
-          <Stagger className="grid-games">
-            {related.map((g, i) => (
-              <GameCard key={g.id} game={g} index={i} />
+          <div className="grid">
+            {related.map((g) => (
+              <GameCard key={g.id} game={g} />
             ))}
-          </Stagger>
+          </div>
         </section>
       )}
-
-      <style>{`
-        .detail-cover { aspect-ratio: 16/8; }
-        @media (max-width: 900px) {
-          .detail-grid { grid-template-columns: 1fr !important; }
-          .detail-cover { aspect-ratio: 16/11; }
-        }
-      `}</style>
-    </div>
+    </>
   );
 }

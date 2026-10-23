@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Pool</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; }
+  body {
+    font:14px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif;
+    background:#fff; color:#1d1d1f; display:grid; place-items:center; padding:16px;
+    user-select:none; -webkit-user-select:none; overflow:hidden;
+  }
+  .app { width:min(920px,100%); display:flex; flex-direction:column; gap:12px; }
+  header { display:flex; align-items:center; gap:14px; }
+  .turn { display:flex; align-items:center; gap:8px; font-weight:550; font-size:14px; }
+  .chip { width:20px; height:20px; border-radius:50%; box-shadow:inset 0 -2px 4px rgba(0,0,0,.25); }
+  .chip.solid { background:radial-gradient(circle at 32% 28%, #ffe08a, #f2b705); }
+  .chip.stripe { background:radial-gradient(circle at 32% 28%, #fff, #f2f2f7); border:3px solid #2c2c2e; }
+  .meta { margin-left:auto; font-size:12px; color:#6e6e73; font-variant-numeric:tabular-nums; text-align:right; }
+  .meta b { color:#1d1d1f; font-size:14px; display:block; }
+  canvas { width:100%; height:auto; display:block; border-radius:20px; touch-action:none; cursor:crosshair;
+    box-shadow:0 12px 40px rgba(0,40,20,.18), 0 0 0 1px rgba(0,0,0,.06); }
+  .btn { border:0; border-radius:10px; padding:8px 14px; font:inherit; font-weight:550; font-size:12.5px; background:#f5f5f7; color:#1d1d1f; cursor:pointer; transition:all .16s; }
+  .btn:hover { background:#ebebef; }
+  .note { font-size:12px; color:#6e6e73; text-align:center; }
+  .banner { position:fixed; inset:0; display:grid; place-items:center; background:rgba(255,255,255,.88); backdrop-filter:blur(8px); opacity:0; pointer-events:none; transition:opacity .3s; }
+  .banner.show { opacity:1; pointer-events:auto; }
+  .banner .box { text-align:center; padding:30px; }
+  .banner h2 { font-size:26px; letter-spacing:-.03em; margin-bottom:6px; }
+  .banner p { color:#6e6e73; font-size:13.5px; margin-bottom:18px; }
+  .banner .btn { background:#0071e3; color:#fff; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="turn"><span class="chip solid" id="chip"></span><span id="turnText">Player 1</span></div>
+    <div class="meta"><b id="potted">0 / 15</b>potted</div>
+    <button class="btn" id="reset">New rack</button>
+  </header>
+  <canvas id="c" width="920" height="520"></canvas>
+  <p class="note">Drag from the cue ball to aim, release to shoot. Bar length sets power.</p>
+</div>
+<div class="banner" id="banner"><div class="box"><h2 id="bTitle">Player 1 wins</h2><p id="bText">Table cleared.</p><button class="btn" id="again">New rack</button></div></div>
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.aspectRatio = `${W} / ${H}`;
+  ctx.scale(dpr, dpr);
+
+  const R = 11.5, RAIL = 26;
+  const LEFT = RAIL, TOP = RAIL, RIGHT = W - RAIL, BOTTOM = H - RAIL;
+  const POCKET_R = 23;
+  const pockets = [
+    { x: LEFT + 4, y: TOP + 4 }, { x: W / 2, y: TOP - 2 }, { x: RIGHT - 4, y: TOP + 4 },
+    { x: LEFT + 4, y: BOTTOM - 4 }, { x: W / 2, y: BOTTOM + 2 }, { x: RIGHT - 4, y: BOTTOM - 4 },
+  ];
+
+  const COLORS = ['#f2b705', '#1d4ed8', '#dc2626', '#7c3aed', '#f97316', '#15803d', '#7f1d1d', '#111827'];
+  let balls = [], cue, shooting = false, aim = null, dragging = false, dragStart = null;
+  let turn = 1, groups = { 1: null, 2: null }, potted = [], pocketedThisShot = [], cuePocketed = false, settled = true;
+
+  function fresh() {
+    balls = []; potted = []; groups = { 1: null, 2: null }; turn = 1; pocketedThisShot = []; settled = true;
+    cue = { x: W * 0.25, y: H / 2, vx: 0, vy: 0, n: 0, cue: true, color: '#ffffff' };
+    balls.push(cue);
+    // rack triangle at right
+    const apex = { x: W * 0.66, y: H / 2 };
+    const order = [1, 9, 2, 10, 8, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15];
+    let k = 0;
+    for (let row = 0; row < 5; row++) {
+      for (let i = 0; i <= row; i++) {
+        const n = order[k++];
+        const x = apex.x + row * (R * 1.78);
+        const y = apex.y + (i - row / 2) * (R * 2.04);
+        balls.push({ x, y, vx: 0, vy: 0, n, color: n === 8 ? '#111827' : COLORS[(n - 1) % 8], stripe: n > 8 });
+      }
+    }
+    updateHud();
+    banner.classList.remove('show');
+  }
+
+  const banner = document.getElementById('banner');
+  function updateHud() {
+    document.getElementById('potted').textContent = `${potted.length} / 15`;
+    document.getElementById('turnText').textContent = groups[turn] ? `Player ${turn} · ${groups[turn]}` : `Player ${turn} · open table`;
+    document.getElementById('chip').className = 'chip ' + (groups[turn] === 'stripes' ? 'stripe' : 'solid');
+  }
+
+  function shoot(dx, dy, power) {
+    const len = Math.hypot(dx, dy) || 1;
+    const speed = Math.min(power, 1) * 26;
+    cue.vx = (dx / len) * speed * -1;
+    cue.vy = (dy / len) * speed * -1;
+    settled = false;
+    pocketedThisShot = [];
+    cuePocketed = false;
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!settled) return;
+    const p = pos(e);
+    if (Math.hypot(p.x - cue.x, p.y - cue.y) > R * 6) return;
+    dragging = true; dragStart = p;
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    const p = pos(e);
+    if (dragging) { aim = p; return; }
+    aim = p;
+  });
+  canvas.addEventListener('pointerup', (e) => {
+    if (!dragging) return;
+    const p = pos(e);
+    const dx = p.x - cue.x, dy = p.y - cue.y;
+    const power = Math.min(Math.hypot(dx, dy) / 260, 1);
+    dragging = false;
+    if (power > 0.04) shoot(dx, dy, power);
+    aim = null;
+  });
+  canvas.addEventListener('pointerleave', () => { if (!dragging) aim = null; });
+
+  function pos(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * (W / r.width), y: (e.clientY - r.top) * (H / r.height) };
+  }
+
+  function step() {
+    let moving = false;
+    for (const b of balls) {
+      if (b === cue && b.pocketed) continue;
+      b.x += b.vx; b.y += b.vy;
+      b.vx *= 0.988; b.vy *= 0.988;
+      if (Math.abs(b.vx) < 0.04) b.vx = 0;
+      if (Math.abs(b.vy) < 0.04) b.vy = 0;
+      if (b.vx || b.vy) moving = true;
+
+      // cushions
+      if (b.x - R < LEFT) { b.x = LEFT + R; b.vx = Math.abs(b.vx) * 0.92; }
+      if (b.x + R > RIGHT) { b.x = RIGHT - R; b.vx = -Math.abs(b.vx) * 0.92; }
+      if (b.y - R < TOP) { b.y = TOP + R; b.vy = Math.abs(b.vy) * 0.92; }
+      if (b.y + R > BOTTOM) { b.y = BOTTOM - R; b.vy = -Math.abs(b.vy) * 0.92; }
+
+      // pockets
+      for (const p of pockets) {
+        if (Math.hypot(b.x - p.x, b.y - p.y) < POCKET_R - 3) {
+          b.pocketed = true; b.vx = 0; b.vy = 0;
+          if (b === cue) { cuePocketed = true; }
+          else { potted.push(b.n); pocketedThisShot.push(b); }
+        }
+      }
+    }
+
+    // ball collisions
+    for (let i = 0; i < balls.length; i++) {
+      const a = balls[i];
+      if (a.pocketed) continue;
+      for (let j = i + 1; j < balls.length; j++) {
+        const b = balls[j];
+        if (b.pocketed) continue;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.hypot(dx, dy);
+        if (d > 0 && d < R * 2) {
+          const nx = dx / d, ny = dy / d;
+          const overlap = R * 2 - d;
+          a.x -= nx * overlap / 2; a.y -= ny * overlap / 2;
+          b.x += nx * overlap / 2; b.y += ny * overlap / 2;
+          const p = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
+          if (p > 0) {
+            a.vx -= p * nx * 0.96; a.vy -= p * ny * 0.96;
+            b.vx += p * nx * 0.96; b.vy += p * ny * 0.96;
+          }
+        }
+      }
+    }
+
+    if (!moving) {
+      if (!settled) endShot();
+      settled = true;
+    }
+  }
+
+  function endShot() {
+    const shooter = turn;
+    const opponent = 3 - turn;
+    const legal = pocketedThisShot.filter((b) => {
+      if (!groups[shooter]) return true;
+      return (groups[shooter] === 'solids' && b.n < 8) || (groups[shooter] === 'stripes' && b.n > 8);
+    });
+    const eight = pocketedThisShot.some((b) => b.n === 8);
+
+    if (!groups[shooter] && pocketedThisShot.length) {
+      const first = pocketedThisShot.find((b) => b.n !== 8);
+      if (first) groups[shooter] = first.n < 8 ? 'solids' : 'stripes';
+      if (groups[shooter]) groups[opponent] = groups[shooter] === 'solids' ? 'stripes' : 'solids';
+    }
+
+    if (eight) {
+      const mine = potted.filter((n) => (groups[shooter] === 'solids' ? n < 8 : n > 8 && n !== 8)).length;
+      if (mine >= 7 || !groups[shooter]) return finish(opponent, 'Eight-ball too early.');
+      return finish(shooter, 'Eight-ball, game.');
+    }
+
+    if (cuePocketed) {
+      cue.pocketed = false;
+      cue.vx = cue.vy = 0;
+      cue.x = W * 0.25; cue.y = H / 2;
+      turn = opponent;
+    } else if (legal.length === 0) {
+      turn = opponent;
+    }
+
+    const remaining = balls.filter((b) => !b.cue && !b.pocketed).length;
+    updateHud();
+    if (remaining === 0) finish(turn, 'Table cleared.');
+  }
+
+  function finish(winner, text) {
+    banner.classList.add('show');
+    document.getElementById('bTitle').textContent = `Player ${winner} wins`;
+    document.getElementById('bText').textContent = text;
+    window.parent?.postMessage({ type: 'ubid:score', game: 'pool', score: winner === 1 ? 800 : 200 }, '*');
+  }
+
+  function draw() {
+    // rail
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#8b5e34'); g.addColorStop(1, '#6f4524');
+    ctx.fillStyle = g;
+    roundRect(0, 0, W, H, 20); ctx.fill();
+
+    // felt
+    const felt = ctx.createRadialGradient(W / 2, H * .4, 40, W / 2, H / 2, W * .7);
+    felt.addColorStop(0, '#1d8a5a'); felt.addColorStop(1, '#0f6b44');
+    ctx.fillStyle = felt;
+    roundRect(LEFT, TOP, RIGHT - LEFT, BOTTOM - TOP, 10); ctx.fill();
+
+    // pockets
+    ctx.fillStyle = '#0b0b0f';
+    for (const p of pockets) { ctx.beginPath(); ctx.arc(p.x, p.y, POCKET_R, 0, 7); ctx.fill(); }
+
+    // aim
+    if (aim && settled && !cuePocketed) {
+      const dx = aim.x - cue.x, dy = aim.y - cue.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const power = Math.min(len / 260, 1);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,.55)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([7, 7]);
+      ctx.beginPath();
+      ctx.moveTo(cue.x, cue.y);
+      ctx.lineTo(cue.x - (dx / len) * 420, cue.y - (dy / len) * 420);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // cue stick
+      const back = 26 + power * 60;
+      ctx.strokeStyle = '#d9b382'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(cue.x - (dx / len) * back, cue.y - (dy / len) * back);
+      ctx.lineTo(cue.x - (dx / len) * (back + 160), cue.y - (dy / len) * (back + 160));
+      ctx.stroke();
+      // power meter
+      ctx.fillStyle = 'rgba(0,0,0,.35)';
+      ctx.fillRect(W / 2 - 90, H - 18, 180, 6);
+      ctx.fillStyle = power > .75 ? '#ff9f0a' : '#30d158';
+      ctx.fillRect(W / 2 - 90, H - 18, 180 * power, 6);
+      ctx.restore();
+    }
+
+    for (const b of balls) {
+      if (b.pocketed) continue;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(b.x, b.y + 2.5, R, 0, 7);
+      ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, 7);
+      if (b.stripe) {
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.save(); ctx.clip();
+        ctx.fillStyle = b.color; ctx.fillRect(b.x - R, b.y - R * .55, R * 2, R * 1.1);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = b.color; ctx.fill();
+      }
+      const hl = ctx.createRadialGradient(b.x - R * .35, b.y - R * .4, 1, b.x, b.y, R * 1.25);
+      hl.addColorStop(0, 'rgba(255,255,255,.85)'); hl.addColorStop(.45, 'rgba(255,255,255,0)');
+      ctx.fillStyle = hl; ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, 7); ctx.fill();
+      if (!b.cue) {
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(b.x, b.y, R * .45, 0, 7); ctx.fill();
+        ctx.fillStyle = b.n === 8 ? '#111' : '#1d1d1f';
+        ctx.font = `600 ${R * .62}px -apple-system, Inter, sans-serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(String(b.n), b.x, b.y + .5);
+      }
+      ctx.restore();
+    }
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+    else ctx.rect(x, y, w, h);
+  }
+
+  function loop() {
+    requestAnimationFrame(loop);
+    step();
+    draw();
+  }
+  document.getElementById('reset').onclick = fresh;
+  document.getElementById('again').onclick = fresh;
+  fresh();
+  loop();
+})();
+</script>
+</body>
+</html>

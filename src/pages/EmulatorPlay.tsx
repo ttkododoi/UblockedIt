@@ -1,24 +1,9 @@
-import { motion } from 'framer-motion';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Cpu,
-  Expand,
-  FileArchive,
-  Gamepad2,
-  HardDrive,
-  Info,
-  Keyboard,
-  Loader2,
-  RefreshCw,
-  Upload,
-  X,
-} from 'lucide-react';
+import { ArrowLeft, FileArchive, HardDrive, Keyboard, Maximize2, Play, RotateCw, Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useCatalog, type Emulator } from '../lib/catalog';
+import { useCatalog } from '../lib/catalog';
 import { useApp } from '../lib/store';
-import { fmt } from '../lib/api';
+import { CatIcon, EmptyState } from '../components/ui';
 
 const EJS_DATA = 'https://cdn.emulatorjs.org/stable/data/';
 
@@ -27,106 +12,69 @@ export function EmulatorPlay() {
   const { catalog, loading } = useCatalog();
   const { toast } = useApp();
   const navigate = useNavigate();
-  const emu: Emulator | undefined = catalog?.emulators.find((e) => e.id === id);
+  const emu = catalog?.emulators.find((e) => e.id === id);
 
   const [romName, setRomName] = useState<string | null>(null);
   const [romUrl, setRomUrl] = useState<string | null>(null);
-  const [biosName, setBiosName] = useState<string | null>(null);
   const [biosUrl, setBiosUrl] = useState<string | null>(null);
   const [booting, setBooting] = useState(false);
+  const [started, setStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
-  const [volume, setVolume] = useState(0.6);
-  const [started, setStarted] = useState(false);
   const romInput = useRef<HTMLInputElement>(null);
   const biosInput = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const playerRef = useRef<HTMLDivElement>(null);
-  const objectUrls = useRef<string[]>([]);
+  const holderRef = useRef<HTMLDivElement>(null);
+  const urls = useRef<string[]>([]);
 
-  // cleanup object URLs + emulator DOM on unmount / rom change
-  useEffect(() => {
-    return () => {
-      objectUrls.current.forEach((u) => URL.revokeObjectURL(u));
-      objectUrls.current = [];
-    };
-  }, []);
-
-  const resetStage = () => {
-    const holder = playerRef.current;
-    if (holder) holder.innerHTML = '';
+  const reset = () => {
+    if (holderRef.current) holderRef.current.innerHTML = '';
     const w = window as any;
-    ['EJS_player', 'EJS_core', 'EJS_gameUrl', 'EJS_gameName', 'EJS_biosUrl', 'EJS_pathtodata', 'EJS_startOnLoaded', 'EJS_color', 'EJS_backgroundColor', 'EJS_volume', 'EJS_defaultOptions', 'EJS_lang', 'EJS_Buttons', 'EJS_gameParentUrl'].forEach(
-      (k) => delete w[k]
-    );
-    document.querySelectorAll('script[src*="emulatorjs"], script[data-ejs]').forEach((s) => s.remove());
+    Object.keys(w)
+      .filter((k) => k.startsWith('EJS_'))
+      .forEach((k) => delete w[k]);
+    document.querySelectorAll('script[data-ejs]').forEach((s) => s.remove());
   };
 
   useEffect(() => {
-    return () => resetStage();
+    return () => {
+      reset();
+      urls.current.forEach((u) => URL.revokeObjectURL(u));
+    };
   }, [id]);
 
-  const handleRom = (file: File | undefined | null) => {
+  const pickRom = (file?: File | null) => {
     if (!file || !emu) return;
-    const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
-    if (emu.extensions.length && !emu.extensions.includes(ext)) {
-      toast(`${ext} is not a typical ${emu.short} file — trying anyway.`, 'info', 'Heads up');
-    }
     if (file.size > 512 * 1024 * 1024) {
-      setError('That ROM is over 512 MB — too large to load in a browser tab.');
+      setError('That ROM is larger than 512 MB — too big for a browser tab.');
       return;
     }
     setError(null);
     const url = URL.createObjectURL(file);
-    objectUrls.current.push(url);
-    setRomName(file.name);
+    urls.current.push(url);
     setRomUrl(url);
+    setRomName(file.name);
     setStarted(false);
-  };
-
-  const handleBios = (file: File | undefined | null) => {
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    objectUrls.current.push(url);
-    setBiosName(file.name);
-    setBiosUrl(url);
+    reset();
   };
 
   const boot = () => {
-    if (!emu || !romUrl || !playerRef.current) return;
-    if (emu.bios && !biosUrl) {
-      toast(`This core may need a BIOS file (${emu.short}) for some games.`, 'info');
-    }
+    if (!emu || !romUrl || !holderRef.current) return;
     setBooting(true);
     setStarted(true);
     setError(null);
-    const holder = playerRef.current;
+    const holder = holderRef.current;
     holder.innerHTML = '';
-    if (!holder.id) holder.id = 'emulator-stage-' + emu.id;
+    if (!holder.id) holder.id = `ejs-${emu.id}`;
     const w = window as any;
-    w.EJS_player = '#' + holder.id;
+    w.EJS_player = `#${holder.id}`;
     w.EJS_core = emu.core;
     w.EJS_gameUrl = romUrl;
     w.EJS_gameName = romName?.replace(/\.[^.]+$/, '') || emu.short;
     w.EJS_pathtodata = EJS_DATA;
     w.EJS_startOnLoaded = true;
-    w.EJS_lang = 'en';
-    w.EJS_color = '#7c5cff';
+    w.EJS_color = '#0071e3';
     w.EJS_backgroundColor = '#000000';
-    w.EJS_volume = volume;
-    w.EJS_Buttons = {
-      playPause: true,
-      restart: true,
-      mute: true,
-      settings: true,
-      fullscreen: true,
-      saveState: true,
-      loadState: true,
-      screenRecord: false,
-      gamepad: true,
-      cheat: true,
-      volume: true,
-    };
     if (biosUrl) w.EJS_biosUrl = biosUrl;
 
     const script = document.createElement('script');
@@ -135,67 +83,47 @@ export function EmulatorPlay() {
     script.dataset.ejs = 'true';
     script.onerror = () => {
       setBooting(false);
-      const message = 'The emulator runtime could not be downloaded. Check your connection or any blocker extensions, then retry.';
-      setError(message);
-      toast(message, 'error', 'Runtime blocked');
+      setError('The emulator runtime could not be downloaded. Check your connection or any blocker, then retry.');
     };
-    script.onload = () => {
-      setTimeout(() => setBooting(false), 1800);
-    };
+    script.onload = () => setTimeout(() => setBooting(false), 1600);
     document.body.appendChild(script);
   };
 
-  if (loading) {
+  if (loading) return <div className="skeleton" style={{ height: 440, borderRadius: 24 }} />;
+  if (!emu)
     return (
-      <div className="page">
-        <div className="skeleton" style={{ height: 380, borderRadius: 28 }} />
-      </div>
+      <EmptyState icon={ArrowLeft} title="Unknown console">
+        <Link to="/emulators" className="btn btn--sm btn--primary" style={{ marginTop: 12 }}>All emulators</Link>
+      </EmptyState>
     );
-  }
-
-  if (!emu) {
-    return (
-      <div className="page">
-        <div className="empty">
-          <div className="big">🕹️</div>
-          <h2>Unknown console</h2>
-          <Link to="/emulators" className="btn btn-primary" style={{ marginTop: 14 }}>
-            <ArrowLeft size={14} /> All emulators
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="page">
-      <button className="btn btn-ghost btn-sm" onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>
+    <>
+      <button className="btn btn--sm btn--ghost" onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>
         <ArrowLeft size={14} /> Back
       </button>
 
-      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 20 }}>
-        <div className="emu-icon" style={{ ['--emu-color' as any]: emu.color, margin: 0, width: 52, height: 52, fontSize: 24 }}>
-          {emu.icon}
-        </div>
-        <div style={{ flex: 1, minWidth: 220 }}>
-          <h1 style={{ fontSize: 'clamp(24px,3.4vw,36px)', letterSpacing: '-0.04em' }}>{emu.name}</h1>
+      <div className="row wrap" style={{ gap: 14, marginBottom: 20, alignItems: 'flex-start' }}>
+        <span style={{ width: 48, height: 48, borderRadius: 13, display: 'grid', placeItems: 'center', background: 'var(--surface-2)', color: 'var(--ink-2)', flexShrink: 0 }}>
+          <CatIcon name={emu.icon} size={23} />
+        </span>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <h1 className="h3" style={{ fontSize: 26 }}>{emu.name}</h1>
           <div className="row wrap" style={{ gap: 8, marginTop: 6 }}>
-            <span className="badge">{emu.short}</span>
-            <span className="badge">{emu.years}</span>
-            <span className="badge mono">core: {emu.core}</span>
-            {emu.bios && <span className="badge badge-accent">BIOS supported</span>}
-            {emu.heavy && <span className="badge">Heavy core</span>}
+            <span className="pill">{emu.short}</span>
+            <span className="pill">{emu.years}</span>
+            <span className="pill mono">core {emu.core}</span>
+            {emu.bios && <span className="pill pill--outline">BIOS supported</span>}
           </div>
-          <p className="muted small" style={{ marginTop: 8, maxWidth: '64ch' }}>{emu.blurb}</p>
+          <p className="small muted" style={{ marginTop: 8 }}>{emu.blurb}</p>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: started ? '1fr' : 'minmax(0,1.5fr) minmax(0,1fr)', gap: 20 }}>
+      <div className="split" style={{ gridTemplateColumns: started ? '1fr' : 'minmax(0,1.6fr) minmax(0,1fr)' }}>
         <div>
           <div
-            className={`stage ${started ? 'stage-live' : ''}`}
-            style={{ aspectRatio: started ? '16/10' : '16/10', position: 'relative' }}
-            ref={stageRef}
+            className="card"
+            style={{ overflow: 'hidden', background: '#000', position: 'relative', aspectRatio: '16 / 10', padding: 0 }}
             onDragOver={(e) => {
               e.preventDefault();
               setDrag(true);
@@ -204,201 +132,164 @@ export function EmulatorPlay() {
             onDrop={(e) => {
               e.preventDefault();
               setDrag(false);
-              handleRom(e.dataTransfer.files?.[0]);
+              pickRom(e.dataTransfer.files?.[0]);
             }}
           >
-            <div ref={playerRef} style={{ width: '100%', height: '100%' }} />
+            <div ref={holderRef} style={{ width: '100%', height: '100%' }} />
+
             {!started && (
               <div
-                className="flex-center"
                 style={{
-                  position: 'absolute',
-                  inset: 0,
-                  flexDirection: 'column',
-                  gap: 12,
-                  background:
-                    'radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 65%), #05050a',
-                  padding: 24,
-                  textAlign: 'center',
-                  border: drag ? '1.5px dashed var(--accent)' : '1.5px dashed transparent',
+                  position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, textAlign: 'center',
+                  background: drag ? 'var(--accent-soft)' : 'var(--surface)',
+                  outline: drag ? '2px dashed var(--accent)' : 'none', outlineOffset: -8,
                 }}
               >
-                <div style={{ fontSize: 40, opacity: 0.9 }}>{emu.icon}</div>
-                <div style={{ fontFamily: 'var(--display)', fontWeight: 600, fontSize: 18 }}>
-                  {romName ? romName : `Load a ${emu.short} ROM to begin`}
+                <span className="dropzone__icon" style={{ margin: 0 }}><Upload size={22} /></span>
+                <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.02em' }}>
+                  {romName || `Load a ${emu.short} ROM`}
                 </div>
-                <div className="small muted" style={{ maxWidth: 380 }}>
+                <p className="small muted" style={{ maxWidth: 380 }}>
                   {romName
-                    ? 'Ready when you are. Your ROM is only in this tab — nothing is uploaded.'
-                    : `Accepted: ${emu.extensions.join(' · ')}`}
-                </div>
-                <div className="row wrap" style={{ gap: 9, justifyContent: 'center', marginTop: 6 }}>
-                  <button className="btn btn-primary" onClick={() => romInput.current?.click()}>
-                    <Upload size={15} /> {romName ? 'Choose another ROM' : 'Select ROM'}
+                    ? 'Ready. Your file stays in this tab — nothing is uploaded.'
+                    : `Accepted: ${emu.extensions.join('  ·  ')}`}
+                </p>
+                <div className="row wrap" style={{ gap: 8, justifyContent: 'center', marginTop: 4 }}>
+                  <button className="btn btn--primary" onClick={() => romInput.current?.click()}>
+                    <Upload size={14} /> {romName ? 'Choose another' : 'Select ROM'}
                   </button>
                   {romName && (
-                    <button className="btn" onClick={boot}>
-                      <Gamepad2 size={15} /> Boot console
+                    <button className="btn btn--dark" onClick={boot}>
+                      <Play size={14} /> Boot console
+                    </button>
+                  )}
+                  {emu.bios && (
+                    <button className="btn btn--outline" onClick={() => biosInput.current?.click()}>
+                      <HardDrive size={14} /> BIOS
                     </button>
                   )}
                 </div>
-                {emu.bios && (
-                  <button className="btn btn-ghost btn-sm" onClick={() => biosInput.current?.click()}>
-                    <HardDrive size={13} /> {biosName ? `BIOS: ${biosName}` : 'Add BIOS file (optional)'}
-                  </button>
-                )}
-                {error && (
-                  <div className="note warn" style={{ maxWidth: 440, textAlign: 'left' }}>
-                    <AlertTriangle />
-                    <div>{error}</div>
-                  </div>
-                )}
+                {error && <div className="note note--warn" style={{ maxWidth: 460, textAlign: 'left' }}>{error}</div>}
               </div>
             )}
+
             {booting && started && (
-              <div className="player-loading" style={{ background: 'rgba(4,4,10,.85)' }}>
-                <div className="loader-ring" />
-                <div style={{ fontFamily: 'var(--display)', fontSize: 15 }}>Booting {emu.short}</div>
-                <div className="mono small" style={{ letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: 10 }}>
-                  loading wasm core
-                </div>
+              <div className="loading-veil">
+                <div className="spinner" />
+                <div style={{ fontSize: 14 }}>Booting {emu.short}</div>
               </div>
             )}
           </div>
 
-          <div className="row wrap" style={{ gap: 9, marginTop: 12 }}>
-            <button className="btn btn-sm" onClick={() => romInput.current?.click()}>
-              <FileArchive size={14} /> Change ROM
+          <div className="row wrap" style={{ gap: 8, marginTop: 12 }}>
+            <button className="btn btn--sm btn--outline" onClick={() => romInput.current?.click()}>
+              <FileArchive size={13} /> Change ROM
             </button>
             {started && (
               <>
                 <button
-                  className="btn btn-sm"
+                  className="btn btn--sm btn--outline"
                   onClick={() => {
-                    const el = stageRef.current as any;
-                    if (!document.fullscreenElement) el?.requestFullscreen?.().catch(() => toast('Fullscreen blocked.', 'error'));
+                    const el = stageRef.current;
+                    void el;
+                  }}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  className="btn btn--sm btn--outline"
+                  onClick={() => {
+                    const el = holderRef.current?.closest('.card') as any;
+                    if (!document.fullscreenElement) el?.requestFullscreen?.().catch(() => toast('Fullscreen was blocked.', 'error'));
                     else document.exitFullscreen();
                   }}
                 >
-                  <Expand size={14} /> Fullscreen
+                  <Maximize2 size={13} /> Fullscreen
                 </button>
                 <button
-                  className="btn btn-sm"
+                  className="btn btn--sm btn--outline"
                   onClick={() => {
-                    resetStage();
+                    reset();
                     setStarted(false);
                     setBooting(false);
                   }}
                 >
-                  <RefreshCw size={14} /> Reset
+                  <RotateCw size={13} /> Stop
                 </button>
               </>
             )}
-            <div className="spacer" />
-            {romName && (
-              <span className="badge">
-                <Cpu size={11} /> {romName}
-              </span>
-            )}
+            {romName && <span className="pill" style={{ marginLeft: 'auto' }}>{romName}</span>}
           </div>
 
+          <input ref={romInput} type="file" accept={emu.extensions.join(',')} hidden onChange={(e) => pickRom(e.target.files?.[0])} />
           <input
-            ref={romInput}
+            ref={biosInput}
             type="file"
-            accept={emu.extensions.join(',')}
             hidden
-            onChange={(e) => handleRom(e.target.files?.[0])}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              const url = URL.createObjectURL(f);
+              urls.current.push(url);
+              setBiosUrl(url);
+              toast(`BIOS loaded: ${f.name}`, 'success');
+            }}
           />
-          <input ref={biosInput} type="file" hidden onChange={(e) => handleBios(e.target.files?.[0])} />
+          <div ref={stageRef} />
         </div>
 
         {!started && (
           <div className="stack">
-            <div className="card" style={{ padding: 20 }}>
-              <div className="eyebrow">Controls</div>
-              <div className="stack" style={{ gap: 8, marginTop: 12, fontSize: 12.5 }}>
+            <div className="card card--pad">
+              <h3 style={{ fontSize: 15 }}>Controls</h3>
+              <div className="stack" style={{ gap: 8, marginTop: 12, fontSize: 13 }}>
                 {[
                   ['D-pad', 'Arrow keys / WASD'],
                   ['A · B', 'Z · X'],
                   ['Start · Select', 'Enter · Shift'],
                   ['Save state', 'F2 / F4'],
                   ['Fast-forward', 'Hold Space'],
-                  ['Fullscreen', 'F11 or toolbar'],
                 ].map(([k, v]) => (
-                  <div key={k} className="row" style={{ justifyContent: 'space-between' }}>
+                  <div key={k} className="row row--between">
                     <span className="muted">{k}</span>
-                    <span className="mono" style={{ fontSize: 11.5 }}>{v}</span>
+                    <span className="mono" style={{ fontSize: 12 }}>{v}</span>
                   </div>
                 ))}
               </div>
-              <div className="note" style={{ marginTop: 14 }}>
-                <Keyboard />
-                <div>Connect a controller and press a button — it maps itself automatically.</div>
-              </div>
             </div>
-
-            <div className="card" style={{ padding: 20 }}>
-              <div className="eyebrow">Volume</div>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={volume}
-                onChange={(e) => setVolume(Number(e.target.value))}
-                style={{ width: '100%', marginTop: 12, accentColor: 'var(--accent)' }}
-              />
-              <div className="small muted">{Math.round(volume * 100)}%</div>
+            <div className="note">
+              <Keyboard style={{ marginTop: 2 }} />
+              <div>Connect a controller and press a button — it maps itself automatically.</div>
             </div>
-
             {emu.bios && (
-              <div className="note warn">
-                <Info />
-                <div>
-                  <strong style={{ color: 'var(--text)' }}>BIOS recommended.</strong> Some {emu.short} titles refuse to
-                  boot without the console BIOS. Add yours above — it is read locally.
-                </div>
+              <div className="note note--warn">
+                <HardDrive style={{ marginTop: 2 }} />
+                <div>Some {emu.short} titles need a console BIOS. Add yours above; it is read locally.</div>
               </div>
             )}
-
-            <div className="note">
-              <Info />
-              <div>
-                ROMs are memory-mapped in this tab only. Nothing is uploaded, stored or logged. Close the tab and it’s
-                gone.
-              </div>
-            </div>
           </div>
         )}
       </div>
 
-      <div className="section">
-        <div className="eyebrow">Try another console</div>
-        <div className="grid-games" style={{ marginTop: 14 }}>
+      <section className="section">
+        <div className="section-head"><h2 style={{ fontSize: 24 }}>Other consoles</h2></div>
+        <div className="grid grid--tight">
           {(catalog?.emulators || [])
             .filter((e) => e.id !== emu.id)
             .slice(0, 6)
             .map((e) => (
-              <Link key={e.id} to={`/emulators/${e.id}`}>
-                <div className="emu-card" style={{ ['--emu-color' as any]: e.color, padding: 16 }}>
-                  <div className="row" style={{ gap: 10 }}>
-                    <span className="emu-icon" style={{ ['--emu-color' as any]: e.color, margin: 0, width: 36, height: 36, fontSize: 17 }}>
-                      {e.icon}
-                    </span>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{e.name}</div>
-                      <div className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>{e.short} · {e.years}</div>
-                    </div>
+              <Link key={e.id} to={`/emulators/${e.id}`} className="card" style={{ display: 'block', padding: 16, color: 'var(--ink)' }}>
+                <div className="row" style={{ gap: 10 }}>
+                  <CatIcon name={e.icon} size={17} style={{ color: 'var(--ink-2)' }} />
+                  <div>
+                    <div style={{ fontSize: 13.5, fontWeight: 550 }}>{e.name}</div>
+                    <div className="tiny muted">{e.short} · {e.years}</div>
                   </div>
                 </div>
               </Link>
             ))}
         </div>
-      </div>
-
-      <style>{`
-        .stage-live { border-color: color-mix(in srgb, var(--accent) 40%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent); }
-      `}</style>
-    </div>
+      </section>
+    </>
   );
 }

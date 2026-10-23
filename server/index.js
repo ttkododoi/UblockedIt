@@ -16,7 +16,7 @@ import {
   recordLogin,
   publicUser,
 } from './auth.js';
-import { GAMES, CATEGORIES, EMULATORS, RUNTIMES, PROVIDERS, gameById } from './catalog.js';
+import { GAMES, CATEGORIES, EMULATORS, RUNTIMES, gameById } from './catalog.js';
 import {
   inspectApk,
   compatibilityReport,
@@ -41,7 +41,7 @@ app.use(loadUser);
 
 const bad = (res, code, message) => res.status(code).json({ error: code, message });
 
-const AVATARS = ['🛸', '👾', '🎮', '🚀', '🦊', '🐉', '👻', '🧠', '⚡', '🌌', '🕹️', '🎯', '🍄', '🪐', '🔮', '🦉'];
+const AVATARS = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
 
 function validateSignup({ username, email, password }) {
   if (!/^[a-zA-Z0-9_]{3,20}$/.test(String(username || '')))
@@ -222,25 +222,10 @@ app.delete('/api/auth/me', requireUser, (req, res) => {
 /* ------------------------------------------------------------------ */
 
 app.get('/api/catalog', (req, res) => {
-  const custom = db
-    .prepare('SELECT * FROM custom_games ORDER BY created_at DESC LIMIT 200')
-    .all()
-    .map((g) => ({
-      id: g.id,
-      title: g.title,
-      tagline: g.tagline,
-      category: g.category,
-      tags: ['community', 'custom'],
-      rating: 4.5,
-      players: 0,
-      cover: { emoji: g.emoji, from: g.from_color, to: g.to_color },
-      sources: [{ provider: 'local', url: g.url, label: 'Community link' }],
-      custom: true,
-    }));
+  // Every title in the catalog is served from this origin — no third-party embeds.
   res.json({
-    games: [...GAMES, ...custom],
+    games: GAMES,
     categories: CATEGORIES,
-    providers: PROVIDERS,
     emulators: EMULATORS,
     runtimes: RUNTIMES,
   });
@@ -329,7 +314,7 @@ app.post('/api/custom-games', requireUser, (req, res) => {
     String(tagline || '').slice(0, 120),
     String(category || 'Arcade'),
     String(url).slice(0, 500),
-    String(emoji || '🎮').slice(0, 4),
+    String(emoji || '').slice(0, 4),
     String(from || '#7c5cff'),
     String(to || '#00d4ff')
   );
@@ -808,10 +793,10 @@ function seed() {
       'nova@ublockedit.local',
       hashPassword(crypto.randomBytes(16).toString('hex')),
       'Nova',
-      '🛸',
+      '',
       268,
-      'Community host. I run the Friday night Moto X3M tournaments.',
-      'nebula'
+      'Community host. I run the Friday night HexGL time trials.',
+      'white'
     );
     const bot = db.prepare('SELECT id FROM users WHERE username = ?').get('nova');
     const seedPosts = [
@@ -822,10 +807,10 @@ function seed() {
         game: '2048',
       },
       {
-        title: 'Moto X3M level 15 is genuinely cursed',
-        body: 'The last jump requires a full backflip into a 2-frame gap. Anyone got a consistent setup? I keep losing my ragdoll into the spikes.',
-        tag: 'help',
-        game: 'moto-x3m',
+        title: 'HexGL lap times: post your best Skyway run',
+        body: 'I finally got under 1:12 with the airbrake tuck through turn three. Share your ghost-worthy laps and the keys you rebound the airbrake to.',
+        tag: 'challenges',
+        game: 'hexgl',
       },
       {
         title: 'PS1 emulator tips for slow laptops',
@@ -840,10 +825,10 @@ function seed() {
         game: null,
       },
       {
-        title: 'Best local co-op games for two people on one keyboard',
-        body: 'Fireboy & Watergirl, Soccer Random and G-Switch 3 are my top three. Comment yours and I will add them to the weekly rotation.',
+        title: 'Best two-player games for one keyboard',
+        body: 'Connect Four and Pool are on the hub already. Comment your couch-co-op picks and I will put them in the weekly rotation.',
         tag: 'challenges',
-        game: 'soccer-random',
+        game: 'pool',
       },
     ];
     for (const p of seedPosts) {
@@ -877,7 +862,7 @@ function seed() {
         `${name}@ublockedit.local`,
         hashPassword(crypto.randomBytes(12).toString('hex')),
         name,
-        AVATARS[i % AVATARS.length],
+        ''
         (i * 61) % 360
       );
     }

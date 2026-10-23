@@ -9,10 +9,18 @@ import {
   type ReactNode,
 } from 'react';
 import { api } from './api';
-import { applyTheme, THEMES } from './themes';
-import { sfx, setSoundEnabled } from './sound';
+import { applyTheme } from './themes';
+import {
+  COOKIE_NAMES,
+  DEFAULT_CONSENT,
+  getCookie,
+  readConsent,
+  setCookie,
+  writeConsent,
+  type Consent,
+} from './cookies';
 
-type User = {
+export type User = {
   id: number;
   username: string;
   email: string;
@@ -30,14 +38,7 @@ type User = {
 };
 
 type Stats = { plays: number; minutes: number; best: Record<string, number>; apks: number };
-
-type Settings = {
-  theme: string;
-  accent: string;
-  sound: boolean;
-  motion: boolean;
-};
-
+type Settings = { theme: string; accent: string; sound: boolean; motion: boolean };
 type Toast = { id: number; message: string; kind: 'info' | 'success' | 'error'; title?: string };
 
 type Ctx = {
@@ -47,8 +48,13 @@ type Ctx = {
   stats: Stats;
   settings: Settings;
   setSettings: (patch: Partial<Settings>) => void;
+  consent: Consent | null;
+  saveConsent: (c: Consent) => void;
+  openCookiePrefs: () => void;
+  cookiePrefsOpen: boolean;
+  setCookiePrefsOpen: (v: boolean) => void;
   refreshAuth: () => Promise<void>;
-  login: (identifier: string, password: string) => Promise<void>;
+  login: (identifier: string, password: string, remember?: boolean) => Promise<void>;
   signup: (data: { username: string; email: string; password: string; displayName?: string }) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (patch: Partial<User> & { password?: string }) => Promise<any>;
@@ -63,23 +69,15 @@ type Ctx = {
   setCommandOpen: (open: boolean) => void;
 };
 
-const AppCtx = createContext<Ctx | null>(null);
-
-const LS_KEY = 'ubid.settings.v1';
-const LS_USER = 'ubid.lastUser.v1';
+const Ctx = createContext<Ctx | null>(null);
 
 function loadSettings(): Settings {
-  try {
-    const raw = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
-    return {
-      theme: raw.theme || 'nebula',
-      accent: raw.accent || '',
-      sound: raw.sound !== false,
-      motion: raw.motion !== false,
-    };
-  } catch {
-    return { theme: 'nebula', accent: '', sound: true, motion: true };
-  }
+  return {
+    theme: getCookie(COOKIE_NAMES.theme) || 'white',
+    accent: getCookie(COOKIE_NAMES.accent) || '',
+    sound: getCookie(COOKIE_NAMES.sound) !== 'off',
+    motion: getCookie(COOKIE_NAMES.motion) !== 'off',
+  };
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -88,6 +86,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [stats, setStats] = useState<Stats>({ plays: 0, minutes: 0, best: {}, apks: 0 });
   const [settings, setSettingsState] = useState<Settings>(loadSettings);
+  const [consent, setConsent] = useState<Consent | null>(() => readConsent());
+  const [cookiePrefsOpen, setCookiePrefsOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [player, setPlayer] = useState<string | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -95,29 +95,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toast = useCallback((message: string, kind: Toast['kind'] = 'info', title?: string) => {
     const id = toastId.current++;
-    setToasts((t) => [...t.slice(-3), { id, message, kind, title }]);
-    if (kind === 'success') sfx.success();
-    if (kind === 'error') sfx.error();
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4600);
+    setToasts((t) => [...t.slice(-2), { id, message, kind, title }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4200);
   }, []);
 
   const dismissToast = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
 
-  // theme + motion + sound side effects
+  // theme + motion
   useEffect(() => {
     applyTheme(settings.theme, settings.accent || undefined);
-    document.documentElement.classList.toggle('reduce-motion', !settings.motion);
-    setSoundEnabled(settings.sound);
-    try {
-      localStorage.setItem(LS_KEY, JSON.stringify(settings));
-    } catch {
-      /* storage blocked */
+    document.documentElement.dataset.motion = settings.motion ? 'on' : 'off';
+    if (consent?.preferences) {
+      setCookie(COOKIE_NAMES.theme, settings.theme);
+      setCookie(COOKIE_NAMES.accent, settings.accent);
+      setCookie(COOKIE_NAMES.motion, settings.motion ? 'on' : 'off');
+      setCookie(COOKIE_NAMES.sound, settings.sound ? 'on' : 'off');
     }
-  }, [settings]);
+  }, [settings, consent?.preferences]);
 
   const setSettings = useCallback((patch: Partial<Settings>) => {
-    setSettingsState((s) => ({ ...s, ...patch }));
-  }, []);
+    setSettingsState((s) => {
+      const next = { ...s, ...patch };
+      if (consent?.preferences) {
+        if (patch.theme) setCookie(COOKIE_NAMES.theme, next.theme);
+        if (patch.accent !== undefined) setCookie(COOKIE_NAMES.accent, next.accent);
+        if (patch.motion !== undefined) setCookie(COOKIE_NAMES.motion, next.motion ? 'on' : 'off');
+        if (patch.sound !== undefined) setCookie(COOKIE_NAMES.sound, next.sound ? 'on' : 'off');
+      }
+      return next;
+    });
+  }, [consent?.preferences]);
+
+  const saveConsent = useCallback((c: Consent) => {
+    const saved = writeConsent(c);
+    setConsent(saved);
+    setCookiePrefsOpen(false);
+    if (!saved.preferences) {
+      setSettingsState((s) => ({ ...s }));
+    } else {
+      // re-persist current choices now that preferences are allowed
+      setCookie(COOKIE_NAMES.theme, settings.theme);
+      setCookie(COOKIE_NAMES.accent, settings.accent);
+      setCookie(COOKIE_NAMES.motion, settings.motion ? 'on' : 'off');
+      setCookie(COOKIE_NAMES.sound, settings.sound ? 'on' : 'off');
+    }
+  }, [settings]);
 
   const refreshAuth = useCallback(async () => {
     try {
@@ -126,22 +148,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setFavorites(data.favorites || []);
       if (data.stats) setStats(data.stats);
       if (data.user) {
-        const next: Settings = {
-          theme: data.user.theme || 'nebula',
+        setSettingsState({
+          theme: data.user.theme || 'white',
           accent: data.user.accent || '',
           sound: data.user.sound !== false,
           motion: data.user.motion !== false,
-        };
-        setSettingsState((cur) => {
-          const merged = {
-            theme: THEMES.some((t) => t.id === next.theme) ? next.theme : cur.theme,
-            accent: next.accent || cur.accent,
-            sound: data.user!.sound,
-            motion: data.user!.motion,
-          };
-          return merged;
         });
-        localStorage.setItem(LS_USER, JSON.stringify({ username: data.user.username, email: data.user.email }));
       }
     } catch {
       setUser(null);
@@ -155,13 +167,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [refreshAuth]);
 
   const login = useCallback(
-    async (identifier: string, password: string) => {
+    async (identifier: string, password: string, remember = true) => {
       const data = await api.post<{ user: User }>('/api/auth/login', { identifier, password });
       setUser(data.user);
       await refreshAuth();
+      if (remember && consent?.preferences) setCookie(COOKIE_NAMES.lastUser, data.user.username, 180);
       toast(`Welcome back, ${data.user.displayName}.`, 'success');
     },
-    [refreshAuth, toast]
+    [refreshAuth, consent?.preferences, toast]
   );
 
   const signup = useCallback(
@@ -169,7 +182,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const data = await api.post<{ user: User }>('/api/auth/signup', payload);
       setUser(data.user);
       await refreshAuth();
-      toast('Account created — your progress now follows you everywhere.', 'success', 'Welcome aboard');
+      toast('Account created.', 'success', 'Welcome to UblockedIt');
     },
     [refreshAuth, toast]
   );
@@ -179,26 +192,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setFavorites([]);
     setStats({ plays: 0, minutes: 0, best: {}, apks: 0 });
-    toast('Signed out. Your local settings are still saved on this device.');
+    toast('Signed out.');
   }, [toast]);
 
-  const updateProfile = useCallback(
-    async (patch: Partial<User> & { password?: string }) => {
-      if (patch.password) {
-        await api.post('/api/auth/password', { current: (patch as any).current, next: patch.password });
-      }
-      const { password, ...rest } = patch as any;
-      const data = await api.patch<{ user: User }>('/api/auth/me', rest);
-      setUser(data.user);
-      return data.user;
-    },
-    []
-  );
+  const updateProfile = useCallback(async (patch: Partial<User> & { password?: string }) => {
+    const { password, ...rest } = patch as any;
+    if (password) await api.post('/api/auth/password', { current: (patch as any).current, next: password });
+    const data = await api.patch<{ user: User }>('/api/auth/me', rest);
+    setUser(data.user);
+    return data.user;
+  }, []);
 
   const toggleFavorite = useCallback(
     async (gameId: string) => {
       if (!user) {
-        toast('Sign in to build your library.', 'error', 'Not signed in');
+        toast('Sign in to save games to your library.', 'error', 'Not signed in');
         return false;
       }
       const isFav = favorites.includes(gameId);
@@ -206,7 +214,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         if (isFav) await api.del(`/api/favorites/${gameId}`);
         else await api.post(`/api/favorites/${gameId}`);
-        sfx.tap();
       } catch {
         toast('Could not update your library.', 'error');
       }
@@ -217,120 +224,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const openPlayer = useCallback((gameId: string) => {
     setPlayer(gameId);
-    sfx.open();
     document.body.style.overflow = 'hidden';
     try {
       const recent: string[] = JSON.parse(localStorage.getItem('ubid.recent') || '[]');
       localStorage.setItem('ubid.recent', JSON.stringify([gameId, ...recent.filter((x) => x !== gameId)].slice(0, 8)));
-    } catch {}
+    } catch {
+      /* storage may be blocked */
+    }
   }, []);
 
   const closePlayer = useCallback(() => {
     setPlayer(null);
-    sfx.close();
     document.body.style.overflow = '';
   }, []);
 
-  // ⌘K / Ctrl+K
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setCommandOpen(true);
       }
-      if (e.key === 'Escape') {
-        setCommandOpen(false);
-      }
+      if (e.key === 'Escape') setCommandOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // pointer parallax for the aurora backdrop
-  useEffect(() => {
-    if (!settings.motion) return;
-    let raf = 0;
-    const onMove = (e: PointerEvent) => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const x = e.clientX / window.innerWidth - 0.5;
-        const y = e.clientY / window.innerHeight - 0.5;
-        document.documentElement.style.setProperty('--mx', String(x));
-        document.documentElement.style.setProperty('--my', String(y));
-      });
-    };
-    window.addEventListener('pointermove', onMove, { passive: true });
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      cancelAnimationFrame(raf);
-    };
-  }, [settings.motion]);
-
   const value = useMemo<Ctx>(
     () => ({
-      user,
-      ready,
-      favorites,
-      stats,
-      settings,
-      setSettings,
-      refreshAuth,
-      login,
-      signup,
-      logout,
-      updateProfile,
-      toggleFavorite,
-      toast,
-      toasts,
-      dismissToast,
-      player,
-      openPlayer,
-      closePlayer,
-      commandOpen,
-      setCommandOpen,
+      user, ready, favorites, stats, settings, setSettings,
+      consent: consent ?? { ...DEFAULT_CONSENT },
+      saveConsent, openCookiePrefs: () => setCookiePrefsOpen(true), cookiePrefsOpen, setCookiePrefsOpen,
+      refreshAuth, login, signup, logout, updateProfile, toggleFavorite,
+      toast, toasts, dismissToast, player, openPlayer, closePlayer, commandOpen, setCommandOpen,
     }),
-    [
-      user,
-      ready,
-      favorites,
-      stats,
-      settings,
-      setSettings,
-      refreshAuth,
-      login,
-      signup,
-      logout,
-      updateProfile,
-      toggleFavorite,
-      toast,
-      toasts,
-      dismissToast,
-      player,
-      openPlayer,
-      closePlayer,
-      commandOpen,
-    ]
+    [user, ready, favorites, stats, settings, setSettings, consent, saveConsent, cookiePrefsOpen, refreshAuth, login, signup, logout, updateProfile, toggleFavorite, toast, toasts, dismissToast, player, openPlayer, closePlayer, commandOpen]
   );
 
-  return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useApp() {
-  const ctx = useContext(AppCtx);
+  const ctx = useContext(Ctx);
   if (!ctx) throw new Error('useApp must be used inside AppProvider');
   return ctx;
 }
 
-export function usePlayTracker() {
-  const started = useRef<number>(Date.now());
-  const { user } = useApp();
-  return useCallback(
-    (gameId: string, provider = 'local') => {
-      const seconds = Math.round((Date.now() - started.current) / 1000);
-      api.post('/api/play', { gameId, provider, seconds }).catch(() => {});
-      started.current = Date.now();
-      return user != null;
-    },
-    [user]
-  );
+export function initials(name: string) {
+  return (name || '?')
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
+}
+
+export function avatarColor(hue = 210) {
+  return `hsl(${hue} 62% 46%)`;
 }

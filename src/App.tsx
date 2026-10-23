@@ -8,9 +8,9 @@ import { EmulatorPlay } from './pages/EmulatorPlay';
 import { Labs } from './pages/Labs';
 import { ApkRunner } from './pages/ApkRunner';
 import { Community } from './pages/Community';
-import { Login } from './pages/Login';
-import { Signup } from './pages/Signup';
+import { Login, Signup } from './pages/Auth';
 import { Account } from './pages/Account';
+import { About, Cookies, Privacy } from './pages/Legal';
 import { NotFound } from './pages/NotFound';
 
 export default function App() {
@@ -28,6 +28,9 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/account" element={<Account />} />
+        <Route path="/cookies" element={<Cookies />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/about" element={<About />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Layout>

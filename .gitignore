@@ -5,3 +5,7 @@ data/
 .DS_Store
 .env
 .env.local
+
+# local asset scratch (generated + searched reference images)
+image-gen/
+image-search/

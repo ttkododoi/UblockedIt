@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Minesweeper</title>
+<style>
+  :root {
+    --ink: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7; --panel: #f5f5f7;
+    --blue: #0071e3; --red: #ff3b30; --green: #34c759;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Helvetica Neue", sans-serif;
+    background: #fff; color: var(--ink); display: grid; place-items: center; padding: 18px;
+    user-select: none; -webkit-user-select: none;
+  }
+  .app { width: min(560px, 100%); }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  .seg { display: inline-flex; background: var(--panel); border-radius: 9px; padding: 3px; }
+  .seg button {
+    border: 0; background: transparent; font: inherit; font-size: 12.5px; font-weight: 500;
+    padding: 5px 12px; border-radius: 7px; color: var(--muted); cursor: pointer; transition: all .18s ease;
+  }
+  .seg button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .stats { display: flex; gap: 22px; margin-left: auto; }
+  .stat { text-align: right; }
+  .stat b { display: block; font-size: 20px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .board-wrap { position: relative; }
+  #board {
+    display: grid; gap: 3px; background: var(--panel); padding: 8px; border-radius: 16px;
+    touch-action: manipulation;
+  }
+  .cell {
+    aspect-ratio: 1; border: 0; border-radius: 7px; background: #fff; cursor: pointer;
+    font: 600 15px/1 -apple-system, "SF Pro Text", Inter, sans-serif; color: var(--ink);
+    box-shadow: 0 1px 2px rgba(0,0,0,.10), inset 0 -1px 0 rgba(0,0,0,.05);
+    transition: background .12s ease, transform .12s ease;
+    display: grid; place-items: center; padding: 0;
+  }
+  .cell:hover { background: #fafafa; transform: translateY(-1px); }
+  .cell:active { transform: scale(.96); }
+  .cell.open { background: transparent; box-shadow: none; cursor: default; transform: none; }
+  .cell.open:hover { background: #f7f7f9; }
+  .cell.flag { background: #fff7e6; }
+  .cell.mine { background: var(--ink); }
+  .cell.mine::after { content: ""; width: 38%; height: 38%; border-radius: 50%; background: #fff; }
+  .cell.boom { background: var(--red); }
+  .c1 { color: #0071e3 } .c2 { color: #34c759 } .c3 { color: #ff3b30 }
+  .c4 { color: #5e5ce6 } .c5 { color: #b25000 } .c6 { color: #30b0c7 } .c7 { color: #8e8e93 } .c8 { color: #1d1d1f }
+  .flag-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--red); }
+  .banner {
+    position: absolute; inset: 0; display: grid; place-items: center; border-radius: 16px;
+    background: rgba(255,255,255,.82); backdrop-filter: blur(6px); opacity: 0; pointer-events: none;
+    transition: opacity .25s ease;
+  }
+  .banner.show { opacity: 1; pointer-events: auto; }
+  .banner .card { text-align: center; padding: 26px 30px; }
+  .banner h2 { font-size: 24px; letter-spacing: -.03em; margin-bottom: 6px; }
+  .banner p { color: var(--muted); font-size: 13.5px; margin-bottom: 16px; }
+  .btn {
+    border: 0; border-radius: 12px; padding: 10px 20px; font: inherit; font-weight: 550; font-size: 13.5px;
+    background: var(--blue); color: #fff; cursor: pointer; transition: transform .18s ease, opacity .18s;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn.ghost { background: var(--panel); color: var(--ink); }
+  .hint { margin-top: 14px; font-size: 12px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="seg" id="levels">
+      <button data-n="8" data-m="10" class="on">Easy</button>
+      <button data-n="12" data-m="26">Medium</button>
+      <button data-n="16" data-m="48">Hard</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="mines">10</b><span>Mines</span></div>
+      <div class="stat"><b id="time">0:00</b><span>Time</span></div>
+    </div>
+  </header>
+  <div class="board-wrap">
+    <div id="board"></div>
+    <div class="banner" id="banner">
+      <div class="card">
+        <h2 id="bTitle">Cleared</h2>
+        <p id="bText">Nice run.</p>
+        <button class="btn" id="again">Play again</button>
+      </div>
+    </div>
+  </div>
+  <p class="hint">Left click / tap to reveal · right click or long press to flag</p>
+</div>
+<script>
+(() => {
+  const board = document.getElementById('board');
+  const minesEl = document.getElementById('mines');
+  const timeEl = document.getElementById('time');
+  const banner = document.getElementById('banner');
+  const bTitle = document.getElementById('bTitle');
+  const bText = document.getElementById('bText');
+
+  let N = 8, M = 10, cells = [], started = false, over = false, flags = 0, opened = 0, t0 = 0, timer = null, best = 0;
+
+  function build(n, m) {
+    N = n; M = m;
+    board.style.gridTemplateColumns = `repeat(${N}, 1fr)`;
+    board.innerHTML = '';
+    cells = [];
+    started = false; over = false; flags = 0; opened = 0;
+    clearInterval(timer); timer = null;
+    timeEl.textContent = '0:00';
+    minesEl.textContent = M;
+    banner.classList.remove('show');
+    for (let i = 0; i < N * N; i++) {
+      const b = document.createElement('button');
+      b.className = 'cell';
+      b.dataset.i = i;
+      b.addEventListener('contextmenu', (e) => { e.preventDefault(); flag(i); });
+      b.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'touch') {
+          press = setTimeout(() => { flag(i); press = null; }, 380);
+        }
+      });
+      b.addEventListener('pointerup', () => { if (press) { clearTimeout(press); press = null; } });
+      b.addEventListener('pointercancel', () => { if (press) { clearTimeout(press); press = null; } });
+      b.addEventListener('click', () => { if (press === null || press === undefined) { reveal(i); } });
+      board.appendChild(b);
+      cells.push({ bomb: false, open: false, flag: false, n: 0, el: b });
+    }
+  }
+  let press = null;
+
+  function plant(safe) {
+    const pool = [];
+    for (let i = 0; i < N * N; i++) if (i !== safe) pool.push(i);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    pool.slice(0, M).forEach((i) => (cells[i].bomb = true));
+    for (let i = 0; i < N * N; i++) {
+      if (cells[i].bomb) continue;
+      let n = 0;
+      for (const j of neighbors(i)) if (cells[j].bomb) n++;
+      cells[i].n = n;
+    }
+    started = true;
+    t0 = Date.now();
+    timer = setInterval(() => {
+      const s = Math.floor((Date.now() - t0) / 1000);
+      timeEl.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }, 500);
+  }
+
+  function neighbors(i) {
+    const x = i % N, y = Math.floor(i / N), out = [];
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && nx < N && ny >= 0 && ny < N) out.push(ny * N + nx);
+    }
+    return out;
+  }
+
+  function render(i) {
+    const c = cells[i];
+    c.el.className = 'cell' + (c.open ? ' open' : '') + (c.flag ? ' flag' : '') + (c.bomb && c.open ? ' mine' : '');
+    c.el.innerHTML = '';
+    if (c.open) {
+      if (c.bomb) return;
+      if (c.n) { c.el.textContent = c.n; c.el.classList.add('c' + c.n); }
+    } else if (c.flag) {
+      c.el.innerHTML = '<span class="flag-dot"></span>';
+    }
+  }
+
+  function reveal(i) {
+    if (over) return;
+    const c = cells[i];
+    if (c.flag || c.open) return;
+    if (!started) plant(i);
+    if (c.bomb) return lose(i);
+    const stack = [i];
+    while (stack.length) {
+      const k = stack.pop();
+      const cc = cells[k];
+      if (cc.open || cc.flag) continue;
+      cc.open = true; opened++; render(k);
+      if (cc.n === 0) for (const j of neighbors(k)) if (!cells[j].open && !cells[j].bomb) stack.push(j);
+    }
+    check();
+  }
+
+  function flag(i) {
+    if (over || cells[i].open) return;
+    const c = cells[i];
+    if (!c.flag && flags >= M) return;
+    c.flag = !c.flag;
+    flags += c.flag ? 1 : -1;
+    minesEl.textContent = M - flags;
+    render(i);
+    check();
+  }
+
+  function check() {
+    if (opened === N * N - M) return win();
+  }
+
+  function lose(boom) {
+    over = true; clearInterval(timer);
+    cells.forEach((c, i) => { if (c.bomb) { c.open = true; render(i); } });
+    const el = cells[boom].el;
+    el.classList.add('boom');
+    banner.classList.add('show');
+    bTitle.textContent = 'Boom';
+    bText.textContent = `The mine at ${Math.floor(boom / N) + 1}·${(boom % N) + 1} got you after ${timeEl.textContent}.`;
+    post(0);
+  }
+
+  function win() {
+    over = true; clearInterval(timer);
+    const ms = Date.now() - t0;
+    if (!best || ms < best) { best = ms; localStorage.setItem('ubid.minesweeper.best', String(ms)); }
+    banner.classList.add('show');
+    bTitle.textContent = 'Cleared';
+    bText.textContent = `All ${M} mines found in ${timeEl.textContent}.`;
+    post(Math.max(10, Math.round(200000 / Math.max(1, ms / 1000))));
+  }
+
+  function post(score) {
+    window.parent?.postMessage({ type: 'ubid:score', game: 'minesweeper', score }, '*');
+  }
+
+  document.getElementById('levels').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    [...e.currentTarget.children].forEach((x) => x.classList.toggle('on', x === b));
+    build(Number(b.dataset.n), Number(b.dataset.m));
+  });
+  document.getElementById('again').addEventListener('click', () => build(N, M));
+  build(8, 10);
+})();
+</script>
+</body>
+</html>

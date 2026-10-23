@@ -9,10 +9,10 @@ export default defineConfig({
     strictPort: true,
     allowedHosts: true,
     proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:4173',
-        changeOrigin: false,
-      },
+      '/api': { target: 'http://127.0.0.1:4173', changeOrigin: false },
+      // self-hosted games + covers are served by the API in production
+      '/games': { target: 'http://127.0.0.1:4173', changeOrigin: false },
+      '/covers': { target: 'http://127.0.0.1:4173', changeOrigin: false },
     },
   },
   preview: { host: '0.0.0.0', port: 4173, allowedHosts: true },

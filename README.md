@@ -1,106 +1,107 @@
 # UblockedIt
 
-A premium hub for unblocked games, emulator stations, retro runtimes and a real
-Android APK runner. Built as a single Node server + React app with no external
-backend, no accounts provider and no tracking.
+A game hub that behaves like a product: **sixteen self-hosted games**, **thirty emulator cores**, a **Flash/DOS/Scratch lab**, a **real Android APK runner**, accounts with synced libraries and scores, and a community feed.
 
-```
-┌──────────── browser ────────────┐        ┌──── node server ────┐
-│ React 19 + Vite + framer-motion │  ⇄     │ Express 5 · SQLite  │
-│ games · emulators · labs · APK  │  /api  │ auth · catalog ·    │
-└─────────────────────────────────┘        │ community · APK     │
-                                           └─────────┬───────────┘
-                                                     │ signed URL + adb
-                                           ┌─────────▼───────────┐
-                                           │ Android bridge      │
-                                           │ phone / emulator    │
-                                           └─────────────────────┘
-```
+Everything playable is served from this origin. There are no CrazyGames/Poki embeds, no advertising, no cross-site trackers and no emoji.
 
-## What's inside
+---
 
-| Area | Details |
-| --- | --- |
-| **Games** | 57 curated titles. 5 open-source games are vendored and served locally (2048, Hextris, Clumsy Bird, Neon Serpent, Vector Breakout); the rest use the official CrazyGames embed player or Poki at launch. |
-| **Emulators** | 30 stations via EmulatorJS: NES, SNES, N64, GB/GBC/GBA, NDS, PS1, PSP, Genesis, Master System, Game Gear, Arcade, Atari 2600/7800/Lynx, PC Engine, Neo Geo Pocket, WonderSwan, Virtual Boy, C64, Amiga, ZX Spectrum, MSX, ColecoVision, Intellivision, Vectrex, 3DO, Saturn, Dreamcast. |
-| **Labs** | Flash via Ruffle, MS-DOS via js-dos 8, Scratch via TurboWarp. |
-| **APK runner** | Upload → binary `AndroidManifest.xml` + `resources.arsc` inspection (package, version, SDK levels, permissions, ABIs, dex, icon) → install on a real Android target → H.264 screen streaming with touch input. |
-| **Community** | Threads, votes, comments, tags, leaderboard, member stats, community-submitted games. |
-| **Accounts** | scrypt-hashed passwords, httpOnly session cookies, per-user library, playtime, scores, theme, avatar, login history. |
-| **Design** | 8 themes (6 dark, 2 light), 8 accents, spring animations, pointer-tracked glow, magnetic buttons, command palette (⌘K), WebAudio UI sounds, reduced-motion mode, fully responsive. |
+## Design
 
-## Run it
+- **White by default.** The design system in `src/styles.css` is built on Apple's principles: system font stack (`-apple-system`), generous whitespace, hairline `1px` borders, a single accent colour, pill buttons, and motion that only ever touches `transform` and `opacity`.
+- **Eight themes** (`src/lib/themes.ts`): White, Fog, Sand, Mint, Sky, Lilac, Graphite, Midnight — all defined as CSS custom properties, so switching is instant and never re-renders the tree. Seven accent colours can be layered on top.
+- **Contrast checked.** Body text uses `--ink` (#1d1d1f), secondary `--ink-2` (#6e6e73) and tertiary `--ink-3` (#86868b) on white — all above 4.5:1 at their intended sizes. No muted-on-muted text.
+- **No emoji anywhere.** Icons are `lucide-react` SVGs; emulator categories map to icon keys (`cart`, `handheld`, `disc`, `arcade`, `computer`, `vector`); avatars are coloured initials derived from a hue value.
+
+## Performance
+
+- CSS-only animation; no per-frame pointer listeners, no scroll handlers.
+- `backdrop-filter` is limited to the nav, modal scrims and the hero caption.
+- Game tiles use `content-visibility: auto` with a reserved intrinsic size, so long grids cost nothing to lay out.
+- Covers are 800×500 WebP (q80, 380 KB for all sixteen) with `loading="lazy"` + `decoding="async"`; only the hero image is eager.
+- Motion can be disabled globally from the account page or by `prefers-reduced-motion`; `data-motion="off"` collapses every transition.
+- Catalogue data is fetched once into `CatalogProvider` and shared; cards are `memo`ised.
+
+## Games (self-hosted)
+
+| Game | URL | Source |
+| --- | --- | --- |
+| 2048 | `/games/2048/` | MIT, Gabriele Cirulli |
+| Hextris | `/games/hextris/` | GPL-3 |
+| Tetris | `/games/tetris/` | MIT, Jake Gordon |
+| Chess | `/games/chess/` | Apache-2.0, Lars Hartikk |
+| Minesweeper | `/games/minesweeper/` | Original |
+| Sudoku | `/games/sudoku/` | Original |
+| Solitaire | `/games/solitaire/` | Original |
+| Connect Four | `/games/connect4/` | Original |
+| Pool | `/games/pool/` | Original |
+| Serpent (snake) | `/games/snake/` | Original |
+| Breakout | `/games/breakout/` | Original |
+| Clumsy Bird | `/games/clumsy-bird/` | GPL-3, Ellison Leão |
+| Pong | `/games/pong/` | MIT, Jake Gordon |
+| Asteroids | `/games/asteroids/` | MIT, Doug McInnes |
+| Astray | `/games/astray/` | Public domain, wwwtyro |
+| HexGL | `/games/hexgl/` | MIT, BKcore |
+
+Original games post their scores to the parent frame (`{ type: 'ubid:score', game, score }`), which the player forwards to `/api/scores`.
+
+## Emulators
+
+Thirty cores via EmulatorJS (`cdn.emulatorjs.org`, loaded on demand) plus Ruffle for Flash, js-dos for DOS and TurboWarp for Scratch in **Labs**. ROMs are read with the File API and never uploaded.
+
+## APK runner
+
+`POST /api/apk` streams the package in, parses the binary `AndroidManifest.xml` and `resources.arsc` in Node, and returns package name, label, version, min/target SDK, ABIs, permissions, launcher activity, SHA-256 and a compatibility score. Install paths:
+
+1. **Self-hosted bridge** (`runtime/bridge/bridge.mjs`) — `adb install -r -g` on a USB device or local emulator, screen streamed as H.264 with JPEG fallback, taps forwarded as touch events.
+2. **Cloud device** — an Appetize.io key, embedded.
+3. **Signed download** — HMAC link valid for ten minutes.
+
+## Cookies and consent
+
+| Name | Purpose | Category | Expiry |
+| --- | --- | --- | --- |
+| `ubid_session` | Signed-in session | Essential | 30 days |
+| `ubid_consent` | Your consent record | Essential | 12 months |
+| `ubid_theme` | Theme choice | Preferences | 12 months |
+| `ubid_accent` | Accent choice | Preferences | 12 months |
+| `ubid_motion` | Motion on/off | Preferences | 12 months |
+| `ubid_sound` | UI sound on/off | Preferences | 12 months |
+| `ubid_last_user` | Prefills the login form | Preferences | 180 days |
+
+The banner appears until a choice is stored. `Customise` opens a preferences dialog with three rows (necessary always on). Choices can be revisited from the footer ("Cookie settings"), the account page, or `/cookies`.
+
+## Running it
 
 ```bash
 npm install
-npm run dev          # vite on :5173 + api on :4173
-# or
-npm run build && npm start   # single server on :4173, serves dist + api + games
+npm run dev        # API on :4173, Vite on :5173 (proxies /api, /games, /covers)
+npm run build      # production bundle into dist/
+npm start          # single server on :4173 serving the SPA, API, games and covers
 ```
-
-Requirements: Node 22+ (uses the built-in `node:sqlite`).
 
 ### Environment
 
 | Variable | Purpose |
 | --- | --- |
-| `PORT` | API/production port (default `4173`) |
-| `APK_BRIDGE_URL` | URL of the Android bridge (`http://127.0.0.1:8099`) |
-| `APK_BRIDGE_TOKEN` | Shared secret for the bridge |
-| `APPETIZE_PUBLIC_KEY` | Optional managed cloud device key |
-| `APPETIZE_TOKEN` | Optional Appetize API token for automatic uploads |
-| `SIGNING_SECRET` | HMAC secret for APK download links (set in production) |
-| `DATA_DIR` | Where SQLite + uploads live (default `./data`) |
+| `PORT` | Server port (default `4173`) |
+| `DATA_DIR` | SQLite + uploaded APKs (default `data/`) |
+| `SIGNING_SECRET` | HMAC key for APK download links |
+| `APK_BRIDGE_URL` / `APK_BRIDGE_TOKEN` | Default self-hosted bridge |
+| `APPETIZE_TOKEN` | Optional cloud device fallback |
 
-## APK runner — how it actually works
+### Demo account
 
-Browsers cannot execute Android bytecode. The runner therefore ships a complete
-pipeline with two honest runtime paths:
+`tester` / `newpassword123` — seeded on a fresh database. Delete `data/` to reseed (users, five community threads, leaderboard scores).
 
-1. **Self-hosted bridge** (`runtime/bridge/bridge.mjs`, zero dependencies).
-   Point it at an adb-visible phone or emulator. It installs the uploaded APK
-   (`adb install -r -g`), launches the main activity, then streams
-   `adb exec-out screenrecord --output-format=h264` into the browser, decoded
-   with jmuxer/MSE. Taps and hardware keys are forwarded via `input tap` /
-   `keyevent`. Falls back to JPEG screencaps automatically.
-
-   ```bash
-   adb devices
-   APK_BRIDGE_TOKEN=change-me node runtime/bridge/bridge.mjs
-   APK_BRIDGE_URL=http://127.0.0.1:8099 APK_BRIDGE_TOKEN=change-me npm start
-   ```
-
-2. **Cloud device** — paste an Appetize public key in the setup panel (or set
-   `APPETIZE_PUBLIC_KEY`) and the APK opens on a managed Android device.
-
-If neither is configured, the UI explains the requirement up-front and offers a
-signed download of the inspected package — never a dead screen.
-
-The inspector is a real parser written for this project:
-`server/apk.js` decodes the Android binary XML chunk format, the string pool,
-`resources.arsc` type chunks (to resolve `@0x7f…` icon references), native ABI
-folders, dex count and permissions — then produces a compatibility report.
-
-## Project layout
+## Layout
 
 ```
-server/
-  index.js      express app, all API routes, seeding
-  db.js         node:sqlite schema
-  auth.js       scrypt hashing, sessions, cookies
-  catalog.js    games, emulators, labs metadata
-  apk.js        APK binary parser + inspector
-runtime/bridge/ adb streaming bridge + README
-public/
-  games/        vendored open-source games (MIT/GPL — see their LICENSE files)
-  builtin/      two original canvas arcade games
-src/
-  pages/ components/ lib/  React app
+server/        Express API, SQLite schema, catalog, APK inspector
+public/games/  sixteen self-hosted games
+public/covers/ 800×500 WebP gameplay covers
+src/lib/       api client, store (auth/consent/settings), catalog, themes, cookies
+src/components/ nav, layout, player, command palette, cookie UI, cards
+src/pages/     home, games, detail, emulators, labs, apk, community, auth, account, legal
+runtime/bridge self-hosted adb bridge
 ```
-
-## Legal
-
-The hub links to third-party games through their official players; those games
-belong to their respective creators. Vendored games keep their original licences
-(2048 — MIT, Hextris & Clumsy Bird — GPL-3.0). No ROMs or copyrighted APKs are
-bundled — you supply your own files.

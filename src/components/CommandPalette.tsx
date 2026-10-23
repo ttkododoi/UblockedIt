@@ -1,18 +1,16 @@
-import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, Boxes, Command, Gamepad2, Home, MessageSquare, Package, Search, Sparkles } from 'lucide-react';
+import { ArrowRight, Boxes, Gamepad2, Home, MessageCircle, Package, Search, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCatalog } from '../lib/catalog';
 import { useApp } from '../lib/store';
-import { sfx } from '../lib/sound';
 
 const ACTIONS = [
-  { label: 'Home', to: '/', icon: Home, hint: 'Go' },
-  { label: 'Browse all games', to: '/games', icon: Gamepad2, hint: 'Go' },
-  { label: 'Emulator stations', to: '/emulators', icon: Boxes, hint: 'Go' },
-  { label: 'Flash, DOS & Scratch labs', to: '/labs', icon: Sparkles, hint: 'Go' },
-  { label: 'APK runner', to: '/apk', icon: Package, hint: 'Go' },
-  { label: 'Community feed', to: '/community', icon: MessageSquare, hint: 'Go' },
+  { label: 'Home', to: '/', icon: Home },
+  { label: 'All games', to: '/games', icon: Gamepad2 },
+  { label: 'Emulators', to: '/emulators', icon: Boxes },
+  { label: 'Labs', to: '/labs', icon: Sparkles },
+  { label: 'APK runner', to: '/apk', icon: Package },
+  { label: 'Community', to: '/community', icon: MessageCircle },
 ];
 
 export function CommandPalette() {
@@ -27,12 +25,12 @@ export function CommandPalette() {
     const q = query.trim().toLowerCase();
     const games = (catalog?.games || [])
       .filter((g) => !q || g.title.toLowerCase().includes(q) || g.category.toLowerCase().includes(q) || g.tags.some((t) => t.includes(q)))
-      .slice(0, 7)
-      .map((g) => ({ kind: 'game' as const, label: g.title, sub: `${g.category} · ${g.tagline}`, emoji: g.cover.emoji, id: g.id }));
+      .slice(0, 6)
+      .map((g) => ({ kind: 'game' as const, label: g.title, sub: g.category, cover: g.cover, id: g.id }));
     const actions = ACTIONS.filter((a) => !q || a.label.toLowerCase().includes(q)).map((a) => ({
       kind: 'action' as const,
       label: a.label,
-      sub: 'Navigate',
+      sub: 'Go to',
       icon: a.icon,
       to: a.to,
     }));
@@ -43,7 +41,7 @@ export function CommandPalette() {
     if (commandOpen) {
       setQuery('');
       setActive(0);
-      setTimeout(() => inputRef.current?.focus(), 40);
+      setTimeout(() => inputRef.current?.focus(), 30);
     }
   }, [commandOpen]);
 
@@ -51,99 +49,65 @@ export function CommandPalette() {
 
   const run = (item: (typeof results)[number]) => {
     setCommandOpen(false);
-    sfx.tap();
     if (item.kind === 'game') openPlayer(item.id);
     else navigate(item.to);
   };
 
+  if (!commandOpen) return null;
+
   return (
-    <AnimatePresence>
-      {commandOpen && (
-        <motion.div
-          className="cmdk-backdrop"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={() => setCommandOpen(false)}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              setActive((i) => Math.min(results.length - 1, i + 1));
-            }
-            if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              setActive((i) => Math.max(0, i - 1));
-            }
-            if (e.key === 'Enter' && results[active]) run(results[active]);
-          }}
-        >
-          <motion.div
-            className="cmdk"
-            initial={{ y: -14, scale: 0.98, opacity: 0 }}
-            animate={{ y: 0, scale: 1, opacity: 1 }}
-            exit={{ y: -10, scale: 0.98, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingRight: 16 }}>
-              <Search size={17} style={{ marginLeft: 18, color: 'var(--muted)' }} />
-              <input
-                ref={inputRef}
-                placeholder="Search games, pages, emulators…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <span className="kbd" style={{ flexShrink: 0 }}>ESC</span>
-            </div>
-            <div className="cmdk-list">
-              {results.length === 0 && (
-                <div style={{ padding: 26, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
-                  Nothing matched “{query}”. Try a genre like “racing”.
-                </div>
-              )}
-              {results.map((item, i) => (
-                <div
-                  key={`${item.kind}-${item.label}-${i}`}
-                  className={`cmdk-item ${i === active ? 'active' : ''}`}
-                  onMouseEnter={() => setActive(i)}
-                  onClick={() => run(item)}
-                >
-                  {item.kind === 'game' ? (
-                    <span style={{ fontSize: 17, width: 20, textAlign: 'center' }}>{item.emoji}</span>
-                  ) : (
-                    <item.icon size={16} style={{ color: 'var(--muted)' }} />
-                  )}
-                  <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                    <span style={{ fontWeight: 550 }}>{item.label}</span>
-                    {item.sub && (
-                      <span style={{ fontSize: 11.5, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {item.sub}
-                      </span>
-                    )}
-                  </span>
-                  <span className="ck">{item.kind === 'game' ? 'Play' : 'Open'}</span>
-                  <ArrowRight size={13} style={{ color: 'var(--muted)' }} />
-                </div>
-              ))}
-            </div>
+    <div className="cmdk" onClick={() => setCommandOpen(false)}>
+      <div
+        className="cmdk__panel"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActive((i) => Math.min(results.length - 1, i + 1));
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActive((i) => Math.max(0, i - 1));
+          }
+          if (e.key === 'Enter' && results[active]) run(results[active]);
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', paddingRight: 14 }}>
+          <Search size={16} style={{ marginLeft: 18, color: 'var(--ink-3)' }} />
+          <input
+            ref={inputRef}
+            placeholder="Search games"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            style={{ borderBottom: 0, flex: 1 }}
+          />
+          <span className="kbd">esc</span>
+        </div>
+        <div className="cmdk__list" style={{ borderTop: '1px solid var(--line-soft)' }}>
+          {results.length === 0 && (
+            <div className="small muted" style={{ padding: 24, textAlign: 'center' }}>No matches for “{query}”.</div>
+          )}
+          {results.map((item, i) => (
             <div
-              style={{
-                borderTop: '1px solid var(--line)',
-                padding: '9px 16px',
-                display: 'flex',
-                gap: 14,
-                fontSize: 10.5,
-                color: 'var(--muted)',
-                fontFamily: 'var(--mono)',
-              }}
+              key={`${item.kind}-${item.label}-${i}`}
+              className={`cmdk__item ${i === active ? 'is-active' : ''}`}
+              onMouseEnter={() => setActive(i)}
+              onClick={() => run(item)}
             >
-              <span className="row" style={{ gap: 5 }}><Command size={11} /> K to open</span>
-              <span>↑↓ navigate</span>
-              <span>↵ select</span>
+              {item.kind === 'game' ? (
+                <img src={item.cover} alt="" width={30} height={30} loading="lazy" />
+              ) : (
+                <item.icon size={16} style={{ color: 'var(--ink-2)' }} />
+              )}
+              <span style={{ minWidth: 0 }}>
+                <span style={{ fontWeight: 500 }}>{item.label}</span>
+                <span style={{ marginLeft: 8, color: 'var(--ink-3)', fontSize: 12 }}>{item.sub}</span>
+              </span>
+              <ArrowRight size={14} className="cmdk__hint" style={{ marginLeft: 'auto', color: 'var(--ink-3)' }} />
             </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

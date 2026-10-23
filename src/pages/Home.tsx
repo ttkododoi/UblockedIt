@@ -1,252 +1,100 @@
-import { motion } from 'framer-motion';
 import {
   ArrowRight,
-  Heart,
-  ArrowUpRight,
   Boxes,
-  ChevronRight,
-  Flame,
+  Check,
+  Cpu,
+  Download,
   Gamepad2,
-  MessageSquare,
+  MessageCircle,
   Package,
   Play,
+  Server,
   ShieldCheck,
   Sparkles,
-  Star,
-  Zap,
+  Users,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useCatalog } from '../lib/catalog';
 import { api, fmt } from '../lib/api';
+import { useCatalog } from '../lib/catalog';
 import { useApp } from '../lib/store';
-import { Counter, MagneticButton, Reveal, Stagger, staggerItem, TiltCard } from '../components/ui';
+import { CatIcon, Reveal, SkeletonTile } from '../components/ui';
 import { GameCard } from '../components/GameCard';
-
-const CATEGORY_META: Record<string, { icon: string; from: string; to: string; blurb: string }> = {
-  Action: { icon: '💥', from: '#ff4d6d', to: '#ff8a00', blurb: 'Reflex and chaos' },
-  Arcade: { icon: '🕹️', from: '#8e2de2', to: '#4a00e0', blurb: 'One more run' },
-  Puzzle: { icon: '🧩', from: '#00c6ff', to: '#0072ff', blurb: 'Slow burn brain food' },
-  Racing: { icon: '🏎️', from: '#f12711', to: '#f5af19', blurb: 'Full throttle' },
-  Sports: { icon: '🏀', from: '#11998e', to: '#38ef7d', blurb: 'Physics, but sporty' },
-  Shooter: { icon: '🎯', from: '#4b6cb7', to: '#182848', blurb: 'Precision or spray' },
-  Strategy: { icon: '♟️', from: '#bdc3c7', to: '#2c3e50', blurb: 'Out-think them' },
-  Casual: { icon: '🫧', from: '#f7971e', to: '#ffd200', blurb: 'Zero commitment' },
-  Horror: { icon: '👻', from: '#232526', to: '#414345', blurb: 'Do not look back' },
-  Multiplayer: { icon: '🌐', from: '#43cea2', to: '#185a9d', blurb: 'Friends optional' },
-  Classic: { icon: '📼', from: '#fc466b', to: '#3f5efb', blurb: 'The originals' },
-};
 
 function Hero() {
   const { catalog } = useCatalog();
-  const { stats } = useApp();
+  const { openPlayer, stats } = useApp();
   const navigate = useNavigate();
   const games = catalog?.games || [];
-  const featured = games.filter((g) => g.featured).slice(0, 3);
-  const emuCount = catalog?.emulators.length || 28;
-  const total = games.length || 55;
-
-  const floats = [
-    { top: '2%', left: '4%', w: 190, r: -5, d: '0s', game: featured[0] },
-    { top: '30%', right: '0%', w: 168, r: 5, d: '-2.4s', game: featured[1] },
-    { bottom: '4%', left: '22%', w: 152, r: -2, d: '-4.8s', game: featured[2] },
-  ];
+  const featured = games.find((g) => g.featured) || games[0];
 
   return (
     <section className="hero">
-      <div className="hero-inner">
-        <div>
-          <motion.div
-            className="eyebrow"
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-          >
-            <span className="badge badge-live" style={{ marginRight: 4 }}>
-              <span className="dot" /> Live hub
-            </span>
-            {emuCount} emulator cores · zero installs
-          </motion.div>
-
-          <motion.h1
-            className="display"
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.08 }}
-          >
-            Every game you were
-            <br />
-            told you <span className="grad-text">couldn’t</span> play.
-          </motion.h1>
-
-          <motion.p
-            className="hero-sub"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.2 }}
-          >
-            Unblocked browser games, {emuCount} retro emulator stations, Flash relics, DOS classics and a genuine APK
-            runner — all inside one absurdly fast hub. No installs, no sign-in walls. Just play.
-          </motion.p>
-
-          <motion.div
-            className="hero-cta"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.3 }}
-          >
-            <MagneticButton className="btn btn-primary btn-lg" onClick={() => navigate('/games')}>
-              <Play size={17} fill="currentColor" /> Start playing
-            </MagneticButton>
-            <MagneticButton
-              className="btn btn-lg"
-              onClick={() => navigate('/emulators')}
-              style={{ background: 'color-mix(in srgb, var(--text) 6%, transparent)' }}
-            >
-              <Boxes size={17} /> Open emulators
-            </MagneticButton>
-          </motion.div>
-
-          <motion.div
-            className="hero-stats"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.45 }}
-          >
-            <div className="hero-stat">
-              <div className="n"><Counter to={total} suffix="+" /></div>
-              <div className="l">games ready to launch</div>
-            </div>
-            <div className="hero-stat">
-              <div className="n"><Counter to={emuCount} /></div>
-              <div className="l">emulator cores</div>
-            </div>
-            <div className="hero-stat">
-              <div className="n"><Counter to={3} /></div>
-              <div className="l">retro runtimes</div>
-            </div>
-            <div className="hero-stat">
-              <div className="n">{stats.minutes ? <Counter to={stats.minutes} suffix="m" /> : '∞'}</div>
-              <div className="l">{stats.minutes ? 'your playtime' : 'free forever'}</div>
-            </div>
-          </motion.div>
+      <div className="hero__text">
+        <span className="eyebrow"><span className="dot" style={{ background: 'var(--green)' }} /> Self-hosted · no embeds</span>
+        <h1 className="h1" style={{ marginTop: 12 }}>
+          Every game.
+          <br />
+          Hosted right here.
+        </h1>
+        <p className="lede" style={{ marginTop: 18 }}>
+          Sixteen hand-picked games served from our own servers, thirty retro consoles in your browser, and a real
+          Android APK runner. No third-party players, no pop-ups, no tracking.
+        </p>
+        <div className="hero__cta">
+          <button className="btn btn--primary btn--lg" onClick={() => (featured ? openPlayer(featured.id) : navigate('/games'))}>
+            <Play size={16} fill="currentColor" /> Play {featured?.title || 'now'}
+          </button>
+          <Link to="/games" className="btn btn--lg btn--outline">
+            Browse all games
+          </Link>
         </div>
+        <div className="hero__stats">
+          <div>
+            <div className="stat__n">{games.length || 16}</div>
+            <div className="stat__l">games installed</div>
+          </div>
+          <div>
+            <div className="stat__n">{catalog?.emulators.length || 30}</div>
+            <div className="stat__l">emulator cores</div>
+          </div>
+          <div>
+            <div className="stat__n">{stats.minutes ? `${stats.minutes}m` : '0'}</div>
+            <div className="stat__l">your playtime</div>
+          </div>
+          <div>
+            <div className="stat__n">0</div>
+            <div className="stat__l">ads, ever</div>
+          </div>
+        </div>
+      </div>
 
-        <div className="hero-visual">
-          <div
-            style={{
-              position: 'absolute',
-              inset: '8% 6%',
-              borderRadius: '50%',
-              border: '1px dashed var(--line-strong)',
-              animation: 'spin 60s linear infinite',
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              inset: '18%',
-              borderRadius: '50%',
-              background: 'radial-gradient(circle, var(--glow), transparent 65%)',
-              filter: 'blur(10px)',
-            }}
-          />
-          {floats.map((f, i) =>
-            f.game ? (
-              <motion.div
-                key={f.game.id}
-                className="float-card"
-                style={{ top: f.top, left: f.left, right: f.right, bottom: f.bottom, width: f.w, ['--r' as any]: `${f.r}deg`, animationDelay: f.d }}
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ delay: 0.35 + i * 0.12, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                onClick={() => navigate(`/game/${f.game!.id}`)}
-                whileHover={{ scale: 1.04 }}
-              >
-                <div
-                  className="mini-cover"
-                  style={{ background: `linear-gradient(135deg, ${f.game.cover.from}, ${f.game.cover.to})` }}
-                >
-                  {f.game.cover.emoji}
-                </div>
-                <div style={{ fontWeight: 600, fontSize: 13, fontFamily: 'var(--display)' }}>{f.game.title}</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <Star size={10} fill="#ffd166" stroke="#ffd166" /> {f.game.rating} · {fmt.num(f.game.players)} playing
-                </div>
-              </motion.div>
-            ) : null
-          )}
-          <motion.div
-            className="float-card"
-            style={{ right: '14%', bottom: '16%', width: 168, ['--r' as any]: '3deg', animationDelay: '-1.2s' }}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.7, duration: 0.7 }}
-          >
-            <div className="row" style={{ gap: 8 }}>
-              <span
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
-                  display: 'grid',
-                  placeItems: 'center',
-                  background: 'linear-gradient(135deg, var(--accent), var(--accent-2))',
-                  flexShrink: 0,
-                }}
-              >
-                <Zap size={16} color="#fff" />
-              </span>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600 }}>Instant boot</div>
-                <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>0.4s median</div>
+      {featured && (
+        <div className="hero__stage">
+          <img src={featured.cover} alt={`${featured.title} gameplay`} width={1600} height={840} fetchPriority="high" />
+          <div className="hero__caption">
+            <div>
+              <div className="row" style={{ gap: 8, marginBottom: 4 }}>
+                <span className="pill pill--green"><span className="dot" />Installed</span>
+                <span className="pill">{featured.category}</span>
               </div>
+              <h3>{featured.title}</h3>
+              <p>{featured.tagline}</p>
             </div>
-          </motion.div>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="btn btn--primary" onClick={() => openPlayer(featured.id)}>
+                <Play size={14} fill="currentColor" /> Play now
+              </button>
+              <Link to={`/game/${featured.id}`} className="btn btn--outline">Details</Link>
+            </div>
+          </div>
         </div>
-      </div>
-
-      <div className="scroll-marquee" style={{ marginTop: 46 }}>
-        <div className="scroll-marquee-track">
-          {[...games, ...games].slice(0, 40).map((g, i) => (
-            <Link
-              key={`${g.id}-${i}`}
-              to={`/game/${g.id}`}
-              className="row"
-              style={{
-                gap: 8,
-                padding: '7px 14px 7px 7px',
-                borderRadius: 999,
-                border: '1px solid var(--line)',
-                background: 'color-mix(in srgb, var(--text) 3%, transparent)',
-                flexShrink: 0,
-                fontSize: 12.5,
-              }}
-            >
-              <span
-                style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: '50%',
-                  display: 'grid',
-                  placeItems: 'center',
-                  fontSize: 13,
-                  background: `linear-gradient(135deg, ${g.cover.from}, ${g.cover.to})`,
-                }}
-              >
-                {g.cover.emoji}
-              </span>
-              {g.title}
-              <span style={{ color: 'var(--muted)', fontSize: 11 }}>★ {g.rating}</span>
-            </Link>
-          ))}
-        </div>
-      </div>
+      )}
     </section>
   );
 }
 
-function ContinueRail() {
+function ContinueRow() {
   const { catalog } = useCatalog();
   const { favorites } = useApp();
   const [recent, setRecent] = useState<string[]>([]);
@@ -259,376 +107,202 @@ function ContinueRail() {
     }
   }, []);
 
-  const ids = [...new Set([...recent, ...favorites])].slice(0, 8);
-  const games = ids.map((id) => catalog?.games.find((g) => g.id === id)).filter(Boolean) as NonNullable<typeof catalog>['games'];
+  const ids = [...new Set([...recent, ...favorites])].slice(0, 5);
+  const games = ids.map((id) => catalog?.games.find((g) => g.id === id)).filter(Boolean) as any[];
   if (!games.length) return null;
 
   return (
     <section className="section">
       <div className="section-head">
         <div>
-          <div className="eyebrow"><Play size={12} /> Pick up where you left off</div>
-          <h2 style={{ marginTop: 10 }}>Continue playing</h2>
+          <h2>Pick up where you left off</h2>
         </div>
-        <Link to="/games?fav=1" className="btn btn-sm">
-          <Heart size={13} /> Your library
-        </Link>
+        <Link to="/account?tab=library" className="btn btn--sm btn--outline">Your library</Link>
       </div>
-      <Stagger className="rail">
+      <div className="grid grid--tight">
         {games.map((g, i) => (
-          <GameCard key={g.id} game={g} index={i} />
+          <GameCard key={g.id} game={g} eager={i < 3} />
         ))}
-      </Stagger>
+      </div>
     </section>
   );
 }
 
-function FeaturedRail() {
+function Library() {
   const { catalog, loading } = useCatalog();
-  const games = (catalog?.games || []).filter((g) => g.featured || g.hot).slice(0, 10);
+  const [category, setCategory] = useState('All');
+  const games = catalog?.games || [];
+  const categories = catalog?.categories || ['All'];
+
+  const list = useMemo(
+    () => (category === 'All' ? games : games.filter((g) => g.category === category)),
+    [games, category]
+  );
+
   return (
     <section className="section">
       <div className="section-head">
         <div>
-          <div className="eyebrow">Hand-picked</div>
-          <h2 style={{ marginTop: 10 }}>Tonight’s headliners</h2>
-          <p>Big hitters, quietly excellent indie gems, and the ones your group chat keeps mentioning.</p>
+          <h2>The library</h2>
+          <p>Everything below is served from this hub. Open a game and it starts — no redirects, no waiting rooms.</p>
         </div>
-        <Link to="/games" className="btn btn-sm">
-          Browse everything <ArrowRight size={14} />
+        <Link to="/games" className="btn btn--sm">
+          See all <ArrowRight size={14} />
         </Link>
       </div>
-      <Stagger className="rail">
+      <div className="chips" style={{ marginBottom: 22 }}>
+        {categories.map((c) => (
+          <button key={c} className={`chip ${category === c ? 'is-active' : ''}`} onClick={() => setCategory(c)}>
+            {c}
+          </button>
+        ))}
+      </div>
+      <div className="grid">
         {loading
-          ? Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="card" style={{ padding: 0 }}>
-                <div className="skeleton" style={{ aspectRatio: '16/11', borderRadius: 0 }} />
-                <div style={{ padding: 14 }}>
-                  <div className="skeleton" style={{ height: 13, width: '60%', marginBottom: 8 }} />
-                  <div className="skeleton" style={{ height: 10, width: '85%' }} />
-                </div>
-              </div>
-            ))
-          : games.map((g, i) => <GameCard key={g.id} game={g} index={i} />)}
-      </Stagger>
+          ? Array.from({ length: 8 }).map((_, i) => <SkeletonTile key={i} />)
+          : list.slice(0, 8).map((g, i) => <GameCard key={g.id} game={g} eager={i < 4} />)}
+      </div>
     </section>
   );
 }
 
-function VibeGrid() {
+function EmulatorSection() {
   const { catalog } = useCatalog();
-  const categories = (catalog?.categories || []).filter((c) => c !== 'All');
-  const counts = useMemo(() => {
-    const map: Record<string, number> = {};
-    (catalog?.games || []).forEach((g) => (map[g.category] = (map[g.category] || 0) + 1));
-    return map;
-  }, [catalog]);
+  const cores = catalog?.emulators || [];
+  const shown = cores.slice(0, 10);
 
   return (
     <section className="section">
-      <div className="section-head">
+      <div className="card" style={{ padding: 'clamp(24px, 4vw, 44px)', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.1fr)', gap: 40, alignItems: 'center' }}>
         <div>
-          <div className="eyebrow">Find your mood</div>
-          <h2 style={{ marginTop: 10 }}>Browse by vibe</h2>
-        </div>
-      </div>
-      <Stagger className="grid-games" gap={0.04}>
-        {categories.map((cat) => {
-          const meta = CATEGORY_META[cat] || { icon: '🎲', from: '#7c5cff', to: '#00e0ff', blurb: 'A bit of everything' };
-          return (
-            <motion.div key={cat} variants={staggerItem}>
-              <Link to={`/games?category=${encodeURIComponent(cat)}`}>
-                <TiltCard tilt={4} style={{ padding: 18, minHeight: 124, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <div
-                    style={{
-                      width: 42,
-                      height: 42,
-                      borderRadius: 12,
-                      display: 'grid',
-                      placeItems: 'center',
-                      fontSize: 20,
-                      background: `linear-gradient(135deg, ${meta.from}, ${meta.to})`,
-                      boxShadow: `0 10px 26px -12px ${meta.from}`,
-                    }}
-                  >
-                    {meta.icon}
-                  </div>
-                  <div>
-                    <div style={{ fontFamily: 'var(--display)', fontWeight: 600, fontSize: 15, marginTop: 14 }}>{cat}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
-                      {meta.blurb} · {counts[cat] || 0} games
-                    </div>
-                  </div>
-                </TiltCard>
-              </Link>
-            </motion.div>
-          );
-        })}
-      </Stagger>
-    </section>
-  );
-}
-
-function Trending() {
-  const { catalog } = useCatalog();
-  const games = [...(catalog?.games || [])].sort((a, b) => b.players - a.players).slice(0, 8);
-  return (
-    <section className="section">
-      <div className="section-head">
-        <div>
-          <div className="eyebrow"><Flame size={12} /> Trending now</div>
-          <h2 style={{ marginTop: 10 }}>What everyone’s playing</h2>
-        </div>
-        <Link to="/games?sort=popular" className="btn btn-sm">
-          See the chart <ArrowRight size={14} />
-        </Link>
-      </div>
-      <Stagger className="grid-games">
-        {games.map((g, i) => (
-          <GameCard key={g.id} game={g} index={i} />
-        ))}
-      </Stagger>
-    </section>
-  );
-}
-
-function EmulatorBand() {
-  const { catalog } = useCatalog();
-  const emus = (catalog?.emulators || []).slice(0, 8);
-  return (
-    <Reveal>
-      <section className="section">
-        <TiltCard
-          tilt={1.5}
-          style={{
-            padding: 0,
-            overflow: 'hidden',
-            background:
-              'radial-gradient(700px 400px at 88% 10%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 65%), color-mix(in srgb, var(--text) 3%, transparent)',
-          }}
-        >
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,0.9fr)', gap: 0 }}>
-            <div style={{ padding: '38px 34px' }}>
-              <div className="eyebrow"><Boxes size={12} /> Emulator stations</div>
-              <h2 style={{ fontSize: 'clamp(26px,3vw,36px)', margin: '12px 0 12px', letterSpacing: '-0.04em' }}>
-                Your childhood console,
-                <br />
-                booted in a tab.
-              </h2>
-              <p style={{ color: 'var(--muted)', fontSize: 14, maxWidth: '46ch', lineHeight: 1.7 }}>
-                {catalog?.emulators.length || 28} cores powered by EmulatorJS — NES to Dreamcast, Game Boy to Neo Geo.
-                Drop in a ROM, get save states, fast-forward, netplay and shaders. Everything runs locally in your browser.
-              </p>
-              <div className="pill-row" style={{ marginTop: 18 }}>
-                {['Save states', 'Fast-forward', 'Netplay', 'CRT shaders', 'Gamepad support'].map((f) => (
-                  <span className="tag" key={f}>
-                    <ShieldCheck size={10} style={{ marginRight: 4, verticalAlign: -1 }} />
-                    {f}
-                  </span>
-                ))}
-              </div>
-              <div className="row" style={{ gap: 10, marginTop: 26, flexWrap: 'wrap' }}>
-                <Link to="/emulators" className="btn btn-primary">
-                  <Boxes size={15} /> Pick a console
-                </Link>
-                <Link to="/labs" className="btn btn-ghost">
-                  Flash, DOS & Scratch <ChevronRight size={14} />
-                </Link>
-              </div>
-            </div>
-            <div style={{ padding: 26, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignContent: 'center' }}>
-              {emus.map((e, i) => (
-                <motion.div
-                  key={e.id}
-                  initial={{ opacity: 0, y: 12 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.04 }}
-                >
-                  <Link
-                    to={`/emulators/${e.id}`}
-                    className="row"
-                    style={{
-                      gap: 9,
-                      padding: '10px 11px',
-                      borderRadius: 12,
-                      border: '1px solid var(--line)',
-                      background: 'color-mix(in srgb, var(--text) 3%, transparent)',
-                      fontSize: 12,
-                      transition: 'all .25s',
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 30,
-                        height: 30,
-                        borderRadius: 9,
-                        display: 'grid',
-                        placeItems: 'center',
-                        background: `color-mix(in srgb, ${e.color} 22%, transparent)`,
-                        border: `1px solid color-mix(in srgb, ${e.color} 40%, transparent)`,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {e.icon}
-                    </span>
-                    <span style={{ minWidth: 0 }}>
-                      <span style={{ display: 'block', fontWeight: 550, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {e.short}
-                      </span>
-                      <span style={{ color: 'var(--muted)', fontSize: 10.5 }}>{e.years}</span>
-                    </span>
-                  </Link>
-                </motion.div>
-              ))}
-            </div>
+          <span className="eyebrow"><Boxes size={13} /> Emulator stations</span>
+          <h2 className="h2" style={{ marginTop: 12 }}>Your childhood console,<br />booted in a tab.</h2>
+          <p className="muted" style={{ marginTop: 14, fontSize: 16, lineHeight: 1.6, maxWidth: '46ch' }}>
+            {cores.length} cores running locally through WebAssembly — NES to Dreamcast, Game Boy to Neo Geo. Load a ROM
+            you own and get save states, rewind, fast-forward and CRT shaders.
+          </p>
+          <div className="row wrap" style={{ gap: 8, marginTop: 18 }}>
+            {['Save states', 'Rewind', 'Gamepad', 'Shaders'].map((f) => (
+              <span className="pill pill--outline" key={f}><Check size={11} /> {f}</span>
+            ))}
           </div>
-        </TiltCard>
-      </section>
-    </Reveal>
-  );
-}
-
-function LabsBand() {
-  const { catalog } = useCatalog();
-  const runtimes = catalog?.runtimes || [];
-  return (
-    <section className="section">
-      <div className="section-head">
-        <div>
-          <div className="eyebrow"><Sparkles size={12} /> Everything in between</div>
-          <h2 style={{ marginTop: 10 }}>Labs & relics</h2>
-          <p>The weird, wonderful stuff that never made it to a console.</p>
+          <div className="row" style={{ gap: 10, marginTop: 24, flexWrap: 'wrap' }}>
+            <Link to="/emulators" className="btn btn--primary">Choose a console</Link>
+            <Link to="/labs" className="btn btn--ghost">Flash, DOS &amp; Scratch <ArrowRight size={14} /></Link>
+          </div>
         </div>
-        <Link to="/labs" className="btn btn-sm">
-          Enter labs <ArrowRight size={14} />
-        </Link>
-      </div>
-      <Stagger className="grid-games" gap={0.06}>
-        {runtimes.map((r) => (
-          <motion.div key={r.id} variants={staggerItem}>
-            <Link to={`/labs?tool=${r.id}`}>
-              <TiltCard tilt={5} style={{ padding: 20, minHeight: 168 }}>
-                <div
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 13,
-                    display: 'grid',
-                    placeItems: 'center',
-                    fontSize: 21,
-                    background: `color-mix(in srgb, ${r.color} 20%, transparent)`,
-                    border: `1px solid color-mix(in srgb, ${r.color} 38%, transparent)`,
-                  }}
-                >
-                  {r.icon}
-                </div>
-                <div style={{ marginTop: 16, fontFamily: 'var(--display)', fontWeight: 600, fontSize: 15 }}>{r.name}</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--mono)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>
-                  {r.tech}
-                </div>
-                <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.6, marginTop: 10 }}>{r.blurb}</p>
-              </TiltCard>
-            </Link>
-          </motion.div>
-        ))}
-      </Stagger>
-    </section>
-  );
-}
-
-function ApkBand() {
-  return (
-    <Reveal>
-      <section className="section">
-        <TiltCard
-          tilt={1}
-          style={{
-            padding: 0,
-            background:
-              'radial-gradient(600px 300px at 10% 0%, color-mix(in srgb, var(--accent-2) 18%, transparent), transparent 60%), color-mix(in srgb, var(--text) 3%, transparent)',
-          }}
-        >
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,0.95fr) minmax(0,1.05fr)', alignItems: 'center' }}>
-            <div style={{ padding: '34px 32px' }}>
-              <div className="eyebrow"><Package size={12} /> APK runner</div>
-              <h2 style={{ fontSize: 'clamp(24px,2.8vw,34px)', margin: '12px 0', letterSpacing: '-0.04em' }}>
-                Sideload anything.
-                <br />
-                We do the boring part.
-              </h2>
-              <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.7 }}>
-                Drop an <span className="mono" style={{ color: 'var(--text)' }}>.apk</span> and the runner reads its
-                manifest, resolves its icon, checks native ABIs and spins up an Android device for it — cloud device
-                farm or your own self-hosted bridge.
-              </p>
-              <div className="row" style={{ gap: 10, marginTop: 22, flexWrap: 'wrap' }}>
-                <Link to="/apk" className="btn btn-primary">
-                  <Package size={15} /> Upload an APK
-                </Link>
-                <Link to="/apk?tab=library" className="btn btn-ghost">
-                  My installs <ChevronRight size={14} />
-                </Link>
-              </div>
-            </div>
-            <div style={{ padding: '26px 30px 26px 0', display: 'flex', justifyContent: 'center' }}>
-              <div
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {shown.map((e) => (
+            <Link
+              key={e.id}
+              to={`/emulators/${e.id}`}
+              className="row"
+              style={{
+                gap: 10, padding: '10px 12px', borderRadius: 12,
+                border: '1px solid var(--line-soft)', background: 'var(--surface)',
+                fontSize: 13, color: 'var(--ink)',
+              }}
+            >
+              <span
                 style={{
-                  position: 'relative',
-                  width: 230,
-                  height: 300,
-                  borderRadius: 30,
-                  border: '1px solid var(--line-strong)',
-                  background: 'linear-gradient(160deg, #14141f, #06060b)',
-                  boxShadow: '0 40px 80px -30px #000, inset 0 1px 0 rgba(255,255,255,.08)',
-                  padding: 12,
-                  overflow: 'hidden',
+                  width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                  display: 'grid', placeItems: 'center',
+                  background: 'var(--surface-2)', color: 'var(--ink-2)',
                 }}
               >
-                <div
-                  style={{
-                    height: '100%',
-                    borderRadius: 22,
-                    background: 'linear-gradient(160deg, color-mix(in srgb, var(--accent) 24%, #0b0b14), color-mix(in srgb, var(--accent-2) 12%, #05050a))',
-                    padding: 16,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 10,
-                  }}
-                >
-                  <div className="row" style={{ gap: 8 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(135deg,#ff6b35,#ffd166)', display: 'grid', placeItems: 'center', fontSize: 17 }}>
-                      📦
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 11.5, fontWeight: 600 }}>SimCity BuildIt</div>
-                      <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,.55)', fontFamily: 'var(--mono)' }}>arm64-v8a · 892 MB</div>
-                    </div>
-                  </div>
-                  <div style={{ flex: 1, borderRadius: 14, background: 'rgba(0,0,0,.35)', border: '1px solid rgba(255,255,255,.08)', display: 'grid', placeItems: 'center' }}>
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
-                      style={{ width: 54, height: 54, borderRadius: '50%', border: '2px dashed rgba(255,255,255,.35)' }}
-                    />
-                  </div>
-                  <div className="row" style={{ gap: 6, fontSize: 9.5, color: 'rgba(255,255,255,.6)', fontFamily: 'var(--mono)' }}>
-                    <span className="badge badge-live" style={{ fontSize: 8.5 }}><span className="dot" />Booting</span>
-                    <span>dex ✓ manifest ✓</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </TiltCard>
-      </section>
-    </Reveal>
+                <CatIcon name={e.icon} size={15} />
+              </span>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: 'block', fontWeight: 550, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.short}</span>
+                <span style={{ color: 'var(--ink-3)', fontSize: 11.5 }}>{e.years}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
-function CommunityPreview() {
+function LabsSection() {
+  const { catalog } = useCatalog();
+  const runtimes = catalog?.runtimes || [];
+
+  return (
+    <section className="section">
+      <div className="section-head">
+        <div>
+          <h2>Everything in between</h2>
+          <p>Flash animations, DOS shareware and Scratch projects — three runtimes that refuse to let the old web die.</p>
+        </div>
+      </div>
+      <div className="grid grid--3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+        {runtimes.map((r, i) => (
+          <Reveal key={r.id} delay={i === 0 ? 0 : i === 1 ? 1 : 2}>
+            <Link to={`/labs?tool=${r.id}`} className="card" style={{ display: 'block', padding: 24, height: '100%', color: 'var(--ink)' }}>
+              <span
+                style={{
+                  width: 42, height: 42, borderRadius: 12, display: 'grid', placeItems: 'center',
+                  background: 'var(--surface-2)', color: 'var(--ink-2)', marginBottom: 16,
+                }}
+              >
+                <CatIcon name={r.icon} size={20} />
+              </span>
+              <h3 style={{ fontSize: 17 }}>{r.name}</h3>
+              <div className="tiny muted" style={{ marginTop: 2 }}>{r.tech}</div>
+              <p className="small muted" style={{ marginTop: 10, lineHeight: 1.55 }}>{r.blurb}</p>
+            </Link>
+          </Reveal>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ApkSection() {
+  return (
+    <section className="section">
+      <div
+        className="card"
+        style={{ padding: 'clamp(24px, 4vw, 44px)', display: 'grid', gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,1fr)', gap: 40, alignItems: 'center' }}
+      >
+        <div>
+          <span className="eyebrow"><Package size={13} /> APK runner</span>
+          <h2 className="h2" style={{ marginTop: 12 }}>Sideload anything.</h2>
+          <p className="muted" style={{ marginTop: 14, fontSize: 16, lineHeight: 1.6, maxWidth: '48ch' }}>
+            Drop an <span className="mono">.apk</span>. We parse the binary manifest, resolve the launcher icon, audit
+            permissions and native ABIs, then install it on a real Android device that streams into this tab.
+          </p>
+          <div className="row" style={{ gap: 10, marginTop: 22, flexWrap: 'wrap' }}>
+            <Link to="/apk" className="btn btn--primary"><Package size={14} /> Upload an APK</Link>
+            <Link to="/apk?tab=library" className="btn btn--outline">My installs</Link>
+          </div>
+        </div>
+        <div className="stack" style={{ gap: 10 }}>
+          {[
+            { icon: Server, t: 'Real adb install', d: 'Your phone or a local emulator, via the bundled bridge.' },
+            { icon: Download, t: 'Signed downloads', d: 'HMAC-protected links, expiring in ten minutes.' },
+            { icon: ShieldCheck, t: 'Inspected first', d: 'Manifest, permissions and ABIs before anything boots.' },
+            { icon: Cpu, t: 'Compatibility score', d: 'A plain-English verdict on whether it will run.' },
+          ].map((f) => (
+            <div key={f.t} className="row" style={{ gap: 12, padding: '12px 14px', border: '1px solid var(--line-soft)', borderRadius: 12 }}>
+              <f.icon size={17} style={{ color: 'var(--ink-2)', flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: 13.5, fontWeight: 550 }}>{f.t}</div>
+                <div className="tiny muted">{f.d}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CommunitySection() {
   const [posts, setPosts] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
+
   useEffect(() => {
     api.get('/api/community/posts?sort=top').then((p) => setPosts(p.slice(0, 3))).catch(() => {});
     api.get('/api/community/stats').then(setStats).catch(() => {});
@@ -638,70 +312,59 @@ function CommunityPreview() {
     <section className="section">
       <div className="section-head">
         <div>
-          <div className="eyebrow"><MessageSquare size={12} /> Community</div>
-          <h2 style={{ marginTop: 10 }}>The lobby is loud</h2>
-          <p>Challenges, tech help and nostalgia — hosted by people who actually play.</p>
+          <h2>From the community</h2>
+          <p>Weekly challenges, emulator help and nostalgia from {stats?.members ?? 0} members.</p>
         </div>
-        <Link to="/community" className="btn btn-sm">
-          Open feed <ArrowRight size={14} />
-        </Link>
+        <Link to="/community" className="btn btn--sm">Open feed <ArrowRight size={14} /></Link>
       </div>
-      <div className="split-2">
+      <div className="split">
         <div className="stack">
           {posts.map((p, i) => (
-            <Reveal key={p.id} delay={i * 0.06}>
-              <Link to="/community" className="post" style={{ display: 'block' }}>
-                <div className="post-head">
-                  <span className="avatar" style={{ ['--hue' as any]: p.author.hue }}>{p.author.avatar}</span>
-                  <div>
-                    <div className="post-author">{p.author.displayName}</div>
-                    <div className="post-meta">@{p.author.username} · {fmt.ago(p.createdAt)}</div>
-                  </div>
-                  <span className="badge" style={{ marginLeft: 'auto' }}>#{p.tag}</span>
+            <Reveal key={p.id} delay={i === 0 ? 0 : 1}>
+              <Link to="/community" className="post" style={{ display: 'block', color: 'var(--ink)' }}>
+                <div className="row" style={{ gap: 10, marginBottom: 8 }}>
+                  <span className="avatar" style={{ width: 26, height: 26, fontSize: 11, ['--av' as any]: `hsl(${p.author.hue} 60% 46%)` }}>
+                    {(p.author.displayName || '?').slice(0, 2).toUpperCase()}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 550 }}>{p.author.displayName}</span>
+                  <span className="tiny muted">{fmt.ago(p.createdAt)}</span>
+                  <span className="pill" style={{ marginLeft: 'auto' }}>{p.tag}</span>
                 </div>
-                <div style={{ fontFamily: 'var(--display)', fontWeight: 600, fontSize: 15, marginBottom: 5 }}>{p.title}</div>
-                <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{p.title}</div>
+                <p className="small muted" style={{ marginTop: 4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                   {p.body}
-                </div>
-                <div className="row" style={{ gap: 14, marginTop: 12, fontSize: 11.5, color: 'var(--muted)' }}>
-                  <span className="row" style={{ gap: 4 }}><ArrowUpRight size={12} /> {p.votes} votes</span>
-                  <span className="row" style={{ gap: 4 }}><MessageSquare size={12} /> {p.comments} replies</span>
+                </p>
+                <div className="row" style={{ gap: 14, marginTop: 10, fontSize: 12, color: 'var(--ink-3)' }}>
+                  <span>{p.votes} votes</span>
+                  <span>{p.comments} replies</span>
                 </div>
               </Link>
             </Reveal>
           ))}
         </div>
-        <Reveal delay={0.1}>
-          <div className="stack">
-            <div className="card" style={{ padding: 22 }}>
-              <div className="eyebrow">Hub pulse</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16 }}>
-                <div>
-                  <div style={{ fontFamily: 'var(--display)', fontSize: 24, fontWeight: 600 }}>{stats?.members ?? '—'}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>members</div>
+        <Reveal delay={1}>
+          <div className="card card--pad">
+            <h3 style={{ fontSize: 16 }}>Hub activity</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+              {[
+                [stats?.members ?? '—', 'members'],
+                [stats?.posts ?? '—', 'threads'],
+                [stats?.comments ?? '—', 'replies'],
+                [`${stats?.hoursPlayed ?? 0}h`, 'logged playtime'],
+              ].map(([n, l]) => (
+                <div key={l as string}>
+                  <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>{n}</div>
+                  <div className="tiny muted">{l}</div>
                 </div>
-                <div>
-                  <div style={{ fontFamily: 'var(--display)', fontSize: 24, fontWeight: 600 }}>{stats?.posts ?? '—'}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>threads</div>
-                </div>
-                <div>
-                  <div style={{ fontFamily: 'var(--display)', fontSize: 24, fontWeight: 600 }}>{stats?.comments ?? '—'}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>replies</div>
-                </div>
-                <div>
-                  <div style={{ fontFamily: 'var(--display)', fontSize: 24, fontWeight: 600 }}>{stats?.hoursPlayed ?? 0}h</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>logged playtime</div>
-                </div>
-              </div>
-              <div className="hairline" />
-              <Link to="/signup" className="btn btn-primary" style={{ width: '100%' }}>
-                <Gamepad2 size={15} /> Join the hub
-              </Link>
+              ))}
             </div>
-            <div className="card" style={{ padding: 18, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.65 }}>
-              <Sparkles size={16} style={{ color: 'var(--accent-2)', marginBottom: 8 }} />
-              Accounts keep your library, scores, themes and APK installs in sync across every device you sign in from.
-            </div>
+            <hr className="hairline" />
+            <Link to="/signup" className="btn btn--primary" style={{ width: '100%' }}>
+              <Users size={14} /> Create an account
+            </Link>
+            <p className="tiny muted" style={{ marginTop: 10, lineHeight: 1.5 }}>
+              Accounts keep your library, scores and themes in sync across devices.
+            </p>
           </div>
         </Reveal>
       </div>
@@ -711,16 +374,14 @@ function CommunityPreview() {
 
 export function Home() {
   return (
-    <div className="page">
+    <>
       <Hero />
-      <ContinueRail />
-      <FeaturedRail />
-      <VibeGrid />
-      <Trending />
-      <EmulatorBand />
-      <LabsBand />
-      <ApkBand />
-      <CommunityPreview />
-    </div>
+      <ContinueRow />
+      <Library />
+      <EmulatorSection />
+      <LabsSection />
+      <ApkSection />
+      <CommunitySection />
+    </>
   );
 }

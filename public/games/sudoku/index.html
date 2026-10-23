@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Sudoku</title>
+<style>
+  :root { --ink:#1d1d1f; --muted:#6e6e73; --line:#d2d2d7; --soft:#f5f5f7; --blue:#0071e3; --red:#ff3b30; }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  body {
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Helvetica Neue", sans-serif;
+    background:#fff; color:var(--ink); display:grid; place-items:center; padding:18px; min-height:100%;
+    user-select:none; -webkit-user-select:none;
+  }
+  .app { width:min(520px,100%); }
+  header { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+  .seg { display:inline-flex; background:var(--soft); border-radius:9px; padding:3px; }
+  .seg button { border:0; background:transparent; font:inherit; font-size:12.5px; font-weight:500; padding:5px 12px; border-radius:7px; color:var(--muted); cursor:pointer; transition:all .18s; }
+  .seg button.on { background:#fff; color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.12); }
+  .meta { margin-left:auto; text-align:right; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .meta b { color:var(--ink); font-size:14px; }
+  #grid {
+    display:grid; grid-template-columns:repeat(9,1fr); gap:1px; background:var(--line);
+    border:2px solid var(--ink); border-radius:10px; overflow:hidden;
+  }
+  .cell {
+    aspect-ratio:1; display:grid; place-items:center; background:#fff; font-size:clamp(15px,3.6vw,21px);
+    font-weight:400; color:var(--blue); cursor:pointer; transition:background .12s; position:relative;
+    font-variant-numeric:tabular-nums;
+  }
+  .cell.given { color:var(--ink); font-weight:550; cursor:default; }
+  .cell.sel { background:#eaf2fd; }
+  .cell.peer { background:#f5f8fd; }
+  .cell.same { background:#dfeafb; }
+  .cell.err { color:var(--red) !important; }
+  .cell.bl { border-left:2px solid var(--ink); } .cell.bt { border-top:2px solid var(--ink); }
+  .pad { display:grid; grid-template-columns:repeat(9,1fr); gap:6px; margin-top:14px; }
+  .pad button {
+    aspect-ratio:1.25; border:0; border-radius:10px; background:var(--soft); font:inherit; font-size:16px;
+    font-weight:500; color:var(--ink); cursor:pointer; transition:all .16s;
+  }
+  .pad button:hover { background:#ebebef; }
+  .pad button:active { transform:scale(.95); }
+  .pad button.done { opacity:.35; }
+  .row { display:flex; gap:8px; margin-top:10px; }
+  .btn { flex:1; border:0; border-radius:11px; padding:11px; font:inherit; font-weight:550; font-size:13.5px; background:var(--soft); color:var(--ink); cursor:pointer; transition:all .18s; }
+  .btn:hover { background:#e9e9ee; }
+  .btn.primary { background:var(--blue); color:#fff; }
+  .banner { position:fixed; inset:0; display:grid; place-items:center; background:rgba(255,255,255,.86); backdrop-filter:blur(8px); opacity:0; pointer-events:none; transition:opacity .3s; }
+  .banner.show { opacity:1; pointer-events:auto; }
+  .banner .card { text-align:center; padding:30px; }
+  .banner h2 { font-size:26px; letter-spacing:-.03em; margin-bottom:6px; }
+  .banner p { color:var(--muted); font-size:13.5px; margin-bottom:18px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="seg" id="diff">
+      <button data-holes="38" class="on">Easy</button>
+      <button data-holes="46">Medium</button>
+      <button data-holes="54">Hard</button>
+    </div>
+    <div class="meta"><b id="time">0:00</b><br />elapsed</div>
+  </header>
+  <div id="grid"></div>
+  <div class="pad" id="pad"></div>
+  <div class="row">
+    <button class="btn" id="erase">Erase</button>
+    <button class="btn" id="check">Check</button>
+    <button class="btn primary" id="new">New puzzle</button>
+  </div>
+</div>
+<div class="banner" id="banner"><div class="card"><h2>Solved</h2><p id="bmsg">Clean grid.</p><button class="btn primary" id="again">Next puzzle</button></div></div>
+<script>
+(() => {
+  const gridEl = document.getElementById('grid');
+  const padEl = document.getElementById('pad');
+  const timeEl = document.getElementById('time');
+  const banner = document.getElementById('banner');
+  let solution = [], puzzle = [], values = [], sel = -1, holes = 38, t0 = 0, timer = null, done = false;
+
+  const shuffled = () => {
+    const a = [1,2,3,4,5,6,7,8,9];
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  };
+
+  function solve(g) {
+    for (let i = 0; i < 81; i++) {
+      if (g[i] === 0) {
+        for (const v of shuffled()) {
+          if (ok(g, i, v)) { g[i] = v; if (solve(g)) return true; g[i] = 0; }
+        }
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function ok(g, idx, v) {
+    const r = Math.floor(idx / 9), c = idx % 9;
+    for (let k = 0; k < 9; k++) {
+      if (g[r * 9 + k] === v || g[k * 9 + c] === v) return false;
+    }
+    const br = Math.floor(r / 3) * 3, bc = Math.floor(c / 3) * 3;
+    for (let y = br; y < br + 3; y++) for (let x = bc; x < bc + 3; x++) if (g[y * 9 + x] === v) return false;
+    return true;
+  }
+
+  function make() {
+    const g = new Array(81).fill(0);
+    solve(g);
+    solution = [...g];
+    puzzle = [...g];
+    const idx = [...Array(81).keys()].sort(() => Math.random() - .5).slice(0, holes);
+    idx.forEach((i) => (puzzle[i] = 0));
+    values = [...puzzle];
+    sel = -1; done = false;
+    banner.classList.remove('show');
+    t0 = Date.now();
+    clearInterval(timer);
+    timer = setInterval(() => {
+      const s = Math.floor((Date.now() - t0) / 1000);
+      timeEl.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }, 500);
+    render();
+  }
+
+  function render() {
+    gridEl.innerHTML = '';
+    for (let i = 0; i < 81; i++) {
+      const c = document.createElement('div');
+      const r = Math.floor(i / 9), col = i % 9;
+      c.className = 'cell' + (puzzle[i] ? ' given' : '') + (col && col % 3 === 0 ? ' bl' : '') + (r && r % 3 === 0 ? ' bt' : '');
+      if (i === sel) c.classList.add('sel');
+      else if (sel >= 0 && (Math.floor(sel / 9) === r || sel % 9 === col || (Math.floor(Math.floor(sel / 9) / 3) === Math.floor(r / 3) && Math.floor((sel % 9) / 3) === Math.floor(col / 3)))) c.classList.add('peer');
+      if (values[i] && sel >= 0 && values[i] === values[sel] && i !== sel) c.classList.add('same');
+      if (values[i] && values[i] !== solution[i] && !puzzle[i]) c.classList.add('err');
+      c.textContent = values[i] || '';
+      c.addEventListener('click', () => { sel = i; render(); });
+      gridEl.appendChild(c);
+    }
+    // pad counts
+    [...padEl.children].forEach((b, k) => {
+      const n = values.filter((v) => v === k + 1).length;
+      b.classList.toggle('done', n >= 9);
+      b.textContent = String(k + 1);
+    });
+  }
+
+  function place(v) {
+    if (sel < 0 || puzzle[sel] || done) return;
+    values[sel] = v;
+    render();
+    if (values.every((x, i) => x === solution[i])) finish();
+  }
+
+  function finish() {
+    done = true;
+    clearInterval(timer);
+    const ms = Date.now() - t0;
+    banner.classList.add('show');
+    document.getElementById('bmsg').textContent = `Solved in ${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}.`;
+    window.parent?.postMessage({ type: 'ubid:score', game: 'sudoku', score: Math.max(10, Math.round(600000 / Math.max(1, ms / 1000))) }, '*');
+  }
+
+  for (let i = 1; i <= 9; i++) {
+    const b = document.createElement('button');
+    b.textContent = i;
+    b.addEventListener('click', () => place(i));
+    padEl.appendChild(b);
+  }
+  document.getElementById('erase').addEventListener('click', () => place(0));
+  document.getElementById('check').addEventListener('click', () => {
+    if (values.some((v, i) => v && v !== solution[i])) {
+      document.getElementById('check').textContent = 'Fix the red cells';
+      setTimeout(() => (document.getElementById('check').textContent = 'Check'), 1600);
+    } else {
+      document.getElementById('check').textContent = 'All correct so far';
+      setTimeout(() => (document.getElementById('check').textContent = 'Check'), 1600);
+    }
+  });
+  document.getElementById('new').addEventListener('click', make);
+  document.getElementById('again').addEventListener('click', make);
+  document.getElementById('diff').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    [...e.currentTarget.children].forEach((x) => x.classList.toggle('on', x === b));
+    holes = Number(b.dataset.holes);
+    make();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (/^[1-9]$/.test(e.key)) place(Number(e.key));
+    if (e.key === 'Backspace' || e.key === 'Delete') place(0);
+    if (e.key.startsWith('Arrow') && sel >= 0) {
+      const r = Math.floor(sel / 9), c = sel % 9;
+      if (e.key === 'ArrowUp') sel = ((r + 8) % 9) * 9 + c;
+      if (e.key === 'ArrowDown') sel = ((r + 1) % 9) * 9 + c;
+      if (e.key === 'ArrowLeft') sel = r * 9 + ((c + 8) % 9);
+      if (e.key === 'ArrowRight') sel = r * 9 + ((c + 1) % 9);
+      render();
+    }
+  });
+  make();
+})();
+</script>
+</body>
+</html>
