@@ -1188,3 +1188,10 @@ table.simple tr:last-child td { border-bottom: 0; }
   .hero__caption .btn { flex: 1; }
   .section { margin-top: 56px; }
 }
+
+@media (max-width: 560px) {
+  .nav__actions { gap: 4px; }
+  .nav__actions .btn--outline { display: none; }
+  .nav__actions .btn--primary { padding: 6px 12px; font-size: 12.5px; }
+  .logo { font-size: 15.5px; }
+}
